@@ -1,0 +1,13 @@
+__pycache__
+node_modules
+.venv
+.mypy_cache
+
+# dev files
+.codex
+SPEC.md
+AGENTS.md
+
+# tests data
+data
+scripts
