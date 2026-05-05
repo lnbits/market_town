@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/market_town/",
+    "name": "PageMarketTown",
+    "template": "/market_town/static/index.vue",
+    "component": "/market_town/static/index.js"
+  },
+  {
+    "path": "/market_town/:id",
+    "name": "PageMarketTownPublic",
+    "template": "/market_town/static/public_page.vue",
+    "component": "/market_town/static/public_page.js"
+  }
+]

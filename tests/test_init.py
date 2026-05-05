@@ -1,0 +1,9 @@
+from fastapi import APIRouter
+
+from .. import market_town_ext
+
+
+# just import router and add it to a test router
+def test_router():
+    router = APIRouter()
+    router.include_router(market_town_ext)
