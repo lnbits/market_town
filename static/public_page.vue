@@ -574,10 +574,9 @@
                     </q-card-section>
                   </q-card>
                 </q-expansion-item>
-                <div class="row q-col-gutter-sm q-mt-sm">
+                <!-- <div class="row q-col-gutter-sm q-mt-sm">
                   <div class="col-12 col-sm-4">
                     <q-btn
-                      class="full-width"
                       color="primary"
                       unelevated
                       icon="content_copy"
@@ -587,7 +586,6 @@
                   </div>
                   <div class="col-12 col-sm-4">
                     <q-btn
-                      class="full-width"
                       outline
                       color="primary"
                       icon="open_in_new"
@@ -599,7 +597,6 @@
                   </div>
                   <div class="col-12 col-sm-4">
                     <q-btn
-                      class="full-width"
                       outline
                       color="grey-8"
                       icon="link"
@@ -607,8 +604,33 @@
                       @click="copyAgentSkillUrl"
                     ></q-btn>
                   </div>
-                </div>
+                </div> -->
               </q-card-section>
+              <q-card-actions align="left" class="q-px-md q-pb-md">
+                <q-btn
+                  color="primary"
+                  unelevated
+                  icon="content_copy"
+                  label="Copy prompt"
+                  @click="copyAgentPrompt"
+                ></q-btn>
+                <q-btn
+                  outline
+                  color="primary"
+                  icon="open_in_new"
+                  label="Open skill"
+                  :href="agentSkillGithubUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                ></q-btn>
+                <q-btn
+                  outline
+                  color="grey-8"
+                  icon="link"
+                  label="Copy URL"
+                  @click="copyAgentSkillUrl"
+                ></q-btn>
+              </q-card-actions>
             </q-card>
 
             <q-card bordered class="q-mt-md">
