@@ -260,6 +260,10 @@ async def create_agent(
     return agent
 
 
+async def delete_agent(agent_id: str) -> None:
+    await db.execute("DELETE FROM market_town.agents WHERE id = :agent_id", {"agent_id": agent_id})
+
+
 async def get_agent(agent_id: str) -> Agent | None:
     return await db.fetchone(
         "SELECT * FROM market_town.agents WHERE id = :id",
@@ -316,6 +320,13 @@ async def create_business(
     )
     await db.insert("market_town.businesses", business)
     return business
+
+
+async def delete_business(business_id: str) -> None:
+    await db.execute(
+        "DELETE FROM market_town.businesses WHERE id = :business_id",
+        {"business_id": business_id},
+    )
 
 
 async def get_business(business_id: str) -> Business | None:
@@ -379,6 +390,33 @@ async def get_epoch(world_id: str, epoch_number: int) -> Epoch | None:
         {"world_id": world_id, "epoch_number": epoch_number},
         Epoch,
     )
+
+
+async def claim_epoch_for_resolution(world_id: str, epoch_number: int, stale_before: datetime) -> bool:
+    result = await db.execute(
+        f"""
+        UPDATE market_town.epochs
+        SET status = 'resolving',
+            updated_at = {db.timestamp_placeholder("now")}
+        WHERE world_id = :world_id
+          AND epoch_number = :epoch_number
+          AND resolved_at IS NULL
+          AND (
+            status = 'open'
+            OR (
+              status = 'resolving'
+              AND updated_at <= {db.timestamp_placeholder("stale_before")}
+            )
+          )
+        """,
+        {
+            "world_id": world_id,
+            "epoch_number": epoch_number,
+            "now": utc_now().timestamp(),
+            "stale_before": stale_before.timestamp(),
+        },
+    )
+    return bool(result.rowcount)
 
 
 async def get_latest_epoch(world_id: str) -> Epoch | None:
@@ -511,6 +549,26 @@ async def create_snapshot(snapshot: BusinessEpochSnapshot) -> BusinessEpochSnaps
     return snapshot
 
 
+async def get_snapshot_for_business_epoch(
+    world_id: str, epoch_number: int, business_id: str
+) -> BusinessEpochSnapshot | None:
+    return await db.fetchone(
+        """
+        SELECT * FROM market_town.business_epoch_snapshots
+        WHERE world_id = :world_id
+          AND epoch_number = :epoch_number
+          AND business_id = :business_id
+        LIMIT 1
+        """,
+        {
+            "world_id": world_id,
+            "epoch_number": epoch_number,
+            "business_id": business_id,
+        },
+        BusinessEpochSnapshot,
+    )
+
+
 async def list_snapshots_for_business(business_id: str, limit: int = 10) -> list[BusinessEpochSnapshot]:
     return await db.fetchall(
         f"""
@@ -526,6 +584,18 @@ async def list_snapshots_for_business(business_id: str, limit: int = 10) -> list
 async def create_season_result(season_result: SeasonResult) -> SeasonResult:
     await db.insert("market_town.season_results", season_result)
     return season_result
+
+
+async def get_season_result(world_id: str, season_number: int) -> SeasonResult | None:
+    return await db.fetchone(
+        """
+        SELECT * FROM market_town.season_results
+        WHERE world_id = :world_id AND season_number = :season_number
+        LIMIT 1
+        """,
+        {"world_id": world_id, "season_number": season_number},
+        SeasonResult,
+    )
 
 
 async def update_season_result(season_result: SeasonResult) -> SeasonResult:
@@ -553,11 +623,7 @@ async def list_paid_payment_requests_for_season(
     *,
     include_before_start: bool = False,
 ) -> list[PaymentRequestRecord]:
-    lower_clause = (
-        ""
-        if include_before_start
-        else f"AND paid_at >= {db.timestamp_placeholder('season_started_at')}"
-    )
+    lower_clause = "" if include_before_start else f"AND paid_at >= {db.timestamp_placeholder('season_started_at')}"
     return await db.fetchall(
         f"""
         SELECT * FROM market_town.payment_requests
@@ -602,6 +668,35 @@ async def get_payment_request_by_hash(payment_hash: str) -> PaymentRequestRecord
     )
 
 
+async def claim_payment_request_for_settlement(
+    payment_hash: str, stale_before: datetime
+) -> PaymentRequestRecord | None:
+    result = await db.execute(
+        f"""
+        UPDATE market_town.payment_requests
+        SET status = 'settling',
+            updated_at = {db.timestamp_placeholder("now")}
+        WHERE payment_hash = :payment_hash
+          AND (
+            status = 'pending'
+            OR status = 'expired'
+            OR (
+              status = 'settling'
+              AND updated_at <= {db.timestamp_placeholder("stale_before")}
+            )
+          )
+        """,
+        {
+            "payment_hash": payment_hash,
+            "now": utc_now().timestamp(),
+            "stale_before": stale_before.timestamp(),
+        },
+    )
+    if not result.rowcount:
+        return None
+    return await get_payment_request_by_hash(payment_hash)
+
+
 async def get_payment_request_by_claim_token(claim_token: str) -> PaymentRequestRecord | None:
     return await db.fetchone(
         """
@@ -614,6 +709,41 @@ async def get_payment_request_by_claim_token(claim_token: str) -> PaymentRequest
     )
 
 
+async def claim_payment_request_credentials_reveal(
+    claim_token: str,
+) -> PaymentRequestRecord | None:
+    result = await db.execute(
+        f"""
+        UPDATE market_town.payment_requests
+        SET credentials_revealed = TRUE,
+            issued_api_key = NULL,
+            updated_at = {db.timestamp_placeholder("now")}
+        WHERE claim_token = :claim_token
+          AND status = 'paid'
+          AND credentials_revealed = FALSE
+          AND agent_id IS NOT NULL
+          AND business_id IS NOT NULL
+        """,
+        {"claim_token": claim_token, "now": utc_now().timestamp()},
+    )
+    if not result.rowcount:
+        return None
+    return await get_payment_request_by_claim_token(claim_token)
+
+
+async def reset_payment_request_credentials_reveal(claim_token: str) -> None:
+    await db.execute(
+        f"""
+        UPDATE market_town.payment_requests
+        SET credentials_revealed = FALSE,
+            updated_at = {db.timestamp_placeholder("now")}
+        WHERE claim_token = :claim_token
+          AND credentials_revealed = TRUE
+        """,
+        {"claim_token": claim_token, "now": utc_now().timestamp()},
+    )
+
+
 async def list_pending_payment_requests(world_id: str) -> list[PaymentRequestRecord]:
     return await db.fetchall(
         """
@@ -623,6 +753,53 @@ async def list_pending_payment_requests(world_id: str) -> list[PaymentRequestRec
         """,
         {"world_id": world_id},
         PaymentRequestRecord,
+    )
+
+
+async def list_active_pending_payment_requests(world_id: str, before_time: datetime) -> list[PaymentRequestRecord]:
+    now = utc_now()
+    return await db.fetchall(
+        f"""
+        SELECT * FROM market_town.payment_requests
+        WHERE world_id = :world_id
+          AND status = 'pending'
+          AND created_at > {db.timestamp_placeholder("before_time")}
+          AND (
+            reservation_expires_at IS NULL
+            OR reservation_expires_at > {db.timestamp_placeholder("now")}
+          )
+        ORDER BY created_at DESC
+        """,
+        {
+            "world_id": world_id,
+            "before_time": before_time.timestamp(),
+            "now": now.timestamp(),
+        },
+        PaymentRequestRecord,
+    )
+
+
+async def expire_pending_payment_requests(world_id: str, before_time: datetime) -> None:
+    await db.execute(
+        f"""
+        UPDATE market_town.payment_requests
+        SET status = 'expired',
+            updated_at = {db.timestamp_placeholder("now")}
+        WHERE world_id = :world_id
+          AND status = 'pending'
+          AND (
+            created_at <= {db.timestamp_placeholder("before_time")}
+            OR (
+              reservation_expires_at IS NOT NULL
+              AND reservation_expires_at <= {db.timestamp_placeholder("now")}
+            )
+          )
+        """,
+        {
+            "world_id": world_id,
+            "now": utc_now().timestamp(),
+            "before_time": before_time.timestamp(),
+        },
     )
 
 

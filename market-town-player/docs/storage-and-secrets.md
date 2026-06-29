@@ -80,7 +80,14 @@ Logs should be JSON Lines files.
 `logs/decisions.jsonl` may contain:
 
 ```json
-{"epoch":1,"price_sat":220,"restock_units":40,"maintenance_budget_sat":6,"quality_budget_sat":5,"reason":"initial conservative policy"}
+{
+  "epoch": 1,
+  "price_sat": 220,
+  "restock_units": 40,
+  "maintenance_budget_sat": 6,
+  "quality_budget_sat": 5,
+  "reason": "initial conservative policy"
+}
 ```
 
 `logs/errors.jsonl` may contain non-secret error details.

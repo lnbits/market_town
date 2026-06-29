@@ -64,6 +64,7 @@
               type="a"
               :href="publicPageUrl"
               target="_blank"
+              rel="noopener noreferrer"
               icon="launch"
             >
               <q-tooltip>Open public page</q-tooltip>

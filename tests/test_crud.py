@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 from uuid import uuid4
 
+from market_town import services as market_services  # type: ignore[import]
 from market_town.crud import (  # type: ignore[import]
     get_payment_request,
     get_world_for_user,
@@ -116,10 +117,78 @@ def test_paid_claim_reveals_credentials(monkeypatch):
         assert credentials.business_id
         assert credentials.api_key
 
+        revealed_request = await get_payment_request(claim.payment_request_id)
+        assert revealed_request is not None
+        assert revealed_request.credentials_revealed is True
+        assert revealed_request.issued_api_key is None
+
+        try:
+            await reveal_claim_credentials(claim.claim_token)
+            raise AssertionError("claim credentials were revealed twice")
+        except ValueError as exc:
+            assert str(exc) == "Credentials already revealed."
+
         session = await get_agent_session(world.id, credentials.api_key)
         assert session.agent.display_name == "bot-merchant"
         assert session.business.display_name == "bot-merchant"
         assert session.current_epoch.epoch_number == 1
+
+    asyncio.run(_run())
+
+
+def test_claim_credentials_reveal_can_retry_after_key_write_failure(monkeypatch):
+    async def fake_create_invoice(*args, **kwargs):
+        return SimpleNamespace(payment_hash="hash-claim-reveal-retry", bolt11="lnbc1revealretry")
+
+    async def fake_pay_tribute(*args, **kwargs):
+        return None
+
+    async def _run():
+        monkeypatch.setattr("market_town.services.create_invoice", fake_create_invoice)
+        monkeypatch.setattr("market_town.services.pay_tribute", fake_pay_tribute)
+
+        world = await ensure_world_bootstrap(
+            uuid4().hex,
+            CreateWorld(name="Market Reveal Retry", wallet_id="wallet-reveal-retry"),
+        )
+        districts = await list_districts(world.id)
+        business_types = await list_business_types(world.id)
+        claim = await create_business_claim(
+            ClaimBusinessRequest(
+                world_id=world.id,
+                display_name="retry-agent",
+                district_id=districts[0].id,
+                business_type_id=business_types[0].id,
+                payout_lnaddress="retry@example.com",
+            )
+        )
+        await payment_received_for_claim(SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"}))
+
+        original_update_agent = market_services.update_agent
+        failed_once = False
+
+        async def flaky_update_agent(agent):
+            nonlocal failed_once
+            if not failed_once:
+                failed_once = True
+                raise ValueError("key write failed")
+            return await original_update_agent(agent)
+
+        monkeypatch.setattr("market_town.services.update_agent", flaky_update_agent)
+
+        try:
+            await reveal_claim_credentials(claim.claim_token)
+            raise AssertionError("credential reveal failure was swallowed")
+        except ValueError as exc:
+            assert str(exc) == "key write failed"
+
+        stored = await get_payment_request(claim.payment_request_id)
+        assert stored is not None
+        assert stored.credentials_revealed is False
+
+        credentials = await reveal_claim_credentials(claim.claim_token)
+        session = await get_agent_session(world.id, credentials.api_key)
+        assert session.agent.display_name == "retry-agent"
 
     asyncio.run(_run())
 
@@ -150,9 +219,7 @@ def test_submit_action_and_resolve_epoch(monkeypatch):
                 payout_lnaddress="resolver@example.com",
             )
         )
-        await payment_received_for_claim(
-            SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"})
-        )
+        await payment_received_for_claim(SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"}))
         credentials = await reveal_claim_credentials(claim.claim_token)
         session = await get_agent_session(world.id, credentials.api_key)
 

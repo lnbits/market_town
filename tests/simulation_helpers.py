@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 from market_town.crud import (
@@ -130,7 +131,7 @@ async def create_paid_agent(
 
 async def submit_strategy(
     world_id: str,
-    agent: SimAgent,
+    agent: Any,
     *,
     epoch_number: int,
     price_sat: int = 220,

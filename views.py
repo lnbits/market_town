@@ -28,5 +28,3 @@ market_town_generic_router.add_api_route(
 
 
 market_town_generic_router.add_api_route("/{world_id}", methods=["GET"], endpoint=index_public)
-
-

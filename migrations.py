@@ -26,7 +26,8 @@ async def m001_initial(db):
             last_digest_text TEXT,
             started_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (user_id)
         );
         """
     )
@@ -45,7 +46,8 @@ async def m001_initial(db):
             slot_limit INTEGER NOT NULL DEFAULT 10,
             config_text TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, district_key)
         );
         """
     )
@@ -64,7 +66,8 @@ async def m001_initial(db):
             base_capacity_units INTEGER NOT NULL DEFAULT 20,
             config_text TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, type_key)
         );
         """
     )
@@ -81,7 +84,8 @@ async def m001_initial(db):
             last_claimed_at TIMESTAMP,
             last_opened_at TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, api_key_hash)
         );
         """
     )
@@ -126,7 +130,8 @@ async def m001_initial(db):
             event_summary_text TEXT,
             digest_text TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, epoch_number)
         );
         """
     )
@@ -166,7 +171,8 @@ async def m001_initial(db):
             reliability_after REAL NOT NULL DEFAULT 0,
             quality_before REAL NOT NULL DEFAULT 0,
             quality_after REAL NOT NULL DEFAULT 0,
-            created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, epoch_number, business_id)
         );
         """
     )
@@ -183,7 +189,8 @@ async def m001_initial(db):
             payout_status TEXT NOT NULL DEFAULT 'pending',
             payout_summary_text TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (world_id, season_number)
         );
         """
     )
@@ -211,7 +218,9 @@ async def m001_initial(db):
             credentials_revealed BOOLEAN NOT NULL DEFAULT FALSE,
             paid_at TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
-            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (payment_hash),
+            UNIQUE (claim_token)
         );
         """
     )
@@ -228,3 +237,7 @@ async def m001_initial(db):
         );
         """
     )
+
+
+async def m002_add_payment_request_reservation_expiry(db):
+    await db.execute("ALTER TABLE market_town.payment_requests ADD COLUMN reservation_expires_at TIMESTAMP;")

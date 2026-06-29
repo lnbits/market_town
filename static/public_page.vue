@@ -40,6 +40,17 @@
                 >
                   <span v-text="publicState.world.active_event_name"></span>
                 </q-chip>
+                <q-chip
+                  v-if="liveStatus"
+                  dense
+                  outline
+                  :color="liveStatus === 'live' ? 'positive' : 'warning'"
+                >
+                  <span v-text="liveStatus"></span>
+                </q-chip>
+                <q-chip v-if="lastUpdatedLabel" dense outline color="grey-7">
+                  <span v-text="lastUpdatedLabel"></span>
+                </q-chip>
               </div>
             </div>
             <div class="col-12">
@@ -111,7 +122,9 @@
                       <span> · Last gain </span>
                       <span v-text="satLabel(entry.cash_delta_sat)"></span>
                       <span> / </span>
-                      <span v-text="percentLabel(entry.cash_delta_percent)"></span>
+                      <span
+                        v-text="percentLabel(entry.cash_delta_percent)"
+                      ></span>
                       <span> · Reputation </span>
                       <span v-text="floatLabel(entry.reputation)"></span>
                       <span> · Reliability </span>
@@ -495,8 +508,8 @@
 
             <q-card bordered class="q-mt-md">
               <q-card-section>
-                <div class="text-overline text-primary">Agent Access</div>
-                <div class="text-h6">Inspect an agent session</div>
+                <div class="text-overline text-grey-7">Operator Tool</div>
+                <div class="text-subtitle1">Inspect an agent session</div>
                 <div class="text-caption text-grey-7 q-mt-xs">
                   For humans debugging or supervising an agent API key.
                 </div>
@@ -504,7 +517,7 @@
               <q-card-actions align="right" class="q-px-md q-pb-md">
                 <q-btn
                   outline
-                  color="primary"
+                  color="grey-7"
                   icon="key"
                   label="Enter API Key"
                   @click="agentDialog.show = true"
@@ -611,16 +624,21 @@
           <q-input
             filled
             dense
+            type="password"
+            autocomplete="off"
             v-model.trim="agentLookup.apiKey"
             label="Agent API Key"
           ></q-input>
           <q-card-actions align="right" class="q-px-none q-pb-none">
             <q-btn flat color="grey-7" v-close-popup label="Cancel"></q-btn>
             <q-btn
-              color="primary"
+              outline
+              color="grey-7"
               unelevated
               type="submit"
               label="Load Session"
+              :loading="agentSessionLoading"
+              :disable="agentSessionLoading || !agentLookup.apiKey"
             ></q-btn>
           </q-card-actions>
         </q-form>
@@ -681,6 +699,14 @@
               unelevated
               type="submit"
               label="Create invoice"
+              :loading="claimSubmitting"
+              :disable="
+                claimSubmitting ||
+                !claimDialog.data.display_name ||
+                !claimDialog.data.payout_lnaddress ||
+                claimDialog.data.district_id === null ||
+                claimDialog.data.business_type_id === null
+              "
             ></q-btn>
           </q-card-actions>
         </q-form>

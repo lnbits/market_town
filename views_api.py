@@ -135,7 +135,10 @@ async def api_reset_world_seeds(
     account_id: AccountId = Depends(check_account_id_exists),
 ) -> SimpleStatus:
     world = await require_owned_world(account_id)
-    await reset_world_seeds(world)
+    try:
+        await reset_world_seeds(world)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
     return SimpleStatus(success=True, message="World defaults reset")
 
 
@@ -265,7 +268,10 @@ async def api_resolve_epoch(
     account_id: AccountId = Depends(check_account_id_exists),
 ) -> Epoch:
     world = await require_owned_world(account_id)
-    return await resolve_epoch(world.id, epoch_number)
+    try:
+        return await resolve_epoch(world.id, epoch_number)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
 
 ############################ Public ############################

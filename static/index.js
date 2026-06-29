@@ -491,7 +491,18 @@ window.PageMarketTown = {
           ? '/market_town/api/v1/world/bootstrap'
           : '/market_town/api/v1/world'
       try {
-        const data = {...this.worldDialog.data}
+        const source = this.worldDialog.data
+        const data = {
+          name: source.name,
+          wallet_id: source.wallet_id,
+          fee_wallet_id: source.fee_wallet_id,
+          operator_fee_percent: source.operator_fee_percent,
+          status: source.status,
+          epoch_duration_hours: source.epoch_duration_hours,
+          submission_cutoff_minutes: source.submission_cutoff_minutes,
+          season_length_epochs: source.season_length_epochs,
+          world_seed: source.world_seed
+        }
         if (!data.fee_wallet_id) {
           data.fee_wallet_id = null
         }
@@ -504,13 +515,15 @@ window.PageMarketTown = {
     },
     async saveDistrict() {
       try {
+        const source = this.districtDialog.data
         const data = {
-          ...this.districtDialog.data,
-          affluence: Number(this.districtDialog.data.affluence),
-          price_sensitivity: Number(this.districtDialog.data.price_sensitivity),
-          quality_preference: Number(
-            this.districtDialog.data.quality_preference
-          )
+          name: source.name,
+          footfall_base: source.footfall_base,
+          affluence: Number(source.affluence),
+          price_sensitivity: Number(source.price_sensitivity),
+          quality_preference: Number(source.quality_preference),
+          slot_limit: source.slot_limit,
+          config_text: source.config_text
         }
         await LNbits.api.request(
           'PUT',
@@ -526,11 +539,21 @@ window.PageMarketTown = {
     },
     async saveBusinessType() {
       try {
+        const source = this.businessTypeDialog.data
+        const data = {
+          name: source.name,
+          category: source.category,
+          open_fee_sat: source.open_fee_sat,
+          base_unit_cost_sat: source.base_unit_cost_sat,
+          fixed_rent_sat: source.fixed_rent_sat,
+          base_capacity_units: source.base_capacity_units,
+          config_text: source.config_text
+        }
         await LNbits.api.request(
           'PUT',
           `/market_town/api/v1/business-types/${this.businessTypeDialog.data.id}`,
           null,
-          this.businessTypeDialog.data
+          data
         )
         this.businessTypeDialog.show = false
         await this.fetchDashboard()
@@ -559,7 +582,11 @@ window.PageMarketTown = {
         .confirmDialog('Delete this Market Town world and all its data?')
         .onOk(async () => {
           try {
-            await LNbits.api.request('DELETE', '/market_town/api/v1/world', null)
+            await LNbits.api.request(
+              'DELETE',
+              '/market_town/api/v1/world',
+              null
+            )
             this.dashboard = {
               world: null,
               current_epoch: null,

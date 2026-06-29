@@ -9,9 +9,7 @@ from .tasks import run_scheduler_loop, wait_for_paid_invoices
 from .views import market_town_generic_router
 from .views_api import market_town_api_router
 
-market_town_ext: APIRouter = APIRouter(
-    prefix="/market_town", tags=["Market Town"]
-)
+market_town_ext: APIRouter = APIRouter(prefix="/market_town", tags=["Market Town"])
 market_town_ext.include_router(market_town_generic_router)
 market_town_ext.include_router(market_town_api_router)
 
@@ -35,12 +33,8 @@ def market_town_stop():
 
 
 def market_town_start():
-    scheduled_tasks.append(
-        create_permanent_unique_task("ext_market_town_paid_invoices", wait_for_paid_invoices)
-    )
-    scheduled_tasks.append(
-        create_permanent_unique_task("ext_market_town_scheduler", run_scheduler_loop)
-    )
+    scheduled_tasks.append(create_permanent_unique_task("ext_market_town_paid_invoices", wait_for_paid_invoices))
+    scheduled_tasks.append(create_permanent_unique_task("ext_market_town_scheduler", run_scheduler_loop))
 
 
 __all__ = [

@@ -13,10 +13,19 @@ window.PageMarketTownPublic = {
         recent_digests: []
       },
       worldSocket: null,
+      worldSocketConnecting: false,
+      worldSocketReconnectTimer: null,
+      worldSocketReconnectDelayMs: 1000,
+      worldSocketShouldReconnect: true,
+      publicRealtime: {
+        status: 'stale',
+        last_updated_at: null
+      },
       paymentSocket: null,
       paymentDialog: {
         show: false
       },
+      claimSubmitting: false,
       agentDialog: {
         show: false
       },
@@ -41,7 +50,8 @@ window.PageMarketTownPublic = {
       agentLookup: {
         apiKey: ''
       },
-      agentSession: null
+      agentSession: null,
+      agentSessionLoading: false
     }
   },
   computed: {
@@ -87,6 +97,13 @@ window.PageMarketTownPublic = {
         option => option.id === this.claimDialog.data.business_type_id
       )
       return item ? this.satLabel(item.open_fee_sat) : '-'
+    },
+    liveStatus() {
+      return this.publicRealtime.status
+    },
+    lastUpdatedLabel() {
+      if (!this.publicRealtime.last_updated_at) return ''
+      return `Updated ${LNbits.utils.formatDate(this.publicRealtime.last_updated_at)}`
     },
     businessColumns() {
       return [
@@ -150,16 +167,6 @@ window.PageMarketTownPublic = {
           align: 'right'
         }
       ]
-    },
-    activeBusinessCount() {
-      return this.publicState.businesses.filter(item => item.status !== 'closed')
-        .length
-    },
-    availableSlotCount() {
-      return this.publicState.districts.reduce(
-        (total, item) => total + (item.available_slots || 0),
-        0
-      )
     }
   },
   methods: {
@@ -188,6 +195,10 @@ window.PageMarketTownPublic = {
         }[status] || 'grey'
       )
     },
+    markPublicRealtime(status) {
+      this.publicRealtime.status = status
+      this.publicRealtime.last_updated_at = new Date().toISOString()
+    },
     async fetchWorldState() {
       try {
         const {data} = await LNbits.api.request(
@@ -196,6 +207,7 @@ window.PageMarketTownPublic = {
           null
         )
         this.publicState = data
+        this.markPublicRealtime(this.publicRealtime.status)
         if (!this.worldSocket) {
           this.connectWorldSocket()
         }
@@ -204,6 +216,8 @@ window.PageMarketTownPublic = {
       }
     },
     async submitClaim() {
+      if (this.claimSubmitting) return
+      this.claimSubmitting = true
       try {
         const {data} = await LNbits.api.request(
           'POST',
@@ -217,6 +231,8 @@ window.PageMarketTownPublic = {
         this.connectPaymentSocket(data.payment_hash)
       } catch (error) {
         LNbits.utils.notifyApiError(error)
+      } finally {
+        this.claimSubmitting = false
       }
     },
     copyInvoice() {
@@ -240,6 +256,10 @@ window.PageMarketTownPublic = {
       }
     },
     async loadAgentSession() {
+      if (this.agentSessionLoading) return
+      const apiKey = this.agentLookup.apiKey
+      if (!apiKey) return
+      this.agentSessionLoading = true
       try {
         const {data} = await LNbits.api.request(
           'GET',
@@ -248,40 +268,79 @@ window.PageMarketTownPublic = {
           null,
           {
             headers: {
-              'X-API-Key': this.agentLookup.apiKey
+              'X-API-Key': apiKey
             }
           }
         )
         this.agentSession = data
+        this.agentLookup.apiKey = ''
         this.agentDialog.show = false
       } catch (error) {
         LNbits.utils.notifyApiError(error)
+      } finally {
+        this.agentSessionLoading = false
       }
     },
-    connectWorldSocket() {
+    scheduleWorldSocketReconnect() {
+      if (!this.worldSocketShouldReconnect || this.worldSocketReconnectTimer) {
+        return
+      }
+      const delay = this.worldSocketReconnectDelayMs
+      this.worldSocketReconnectDelayMs = Math.min(delay * 2, 30000)
+      this.worldSocketReconnectTimer = setTimeout(() => {
+        this.worldSocketReconnectTimer = null
+        this.connectWorldSocket()
+      }, delay)
+    },
+    async connectWorldSocket() {
+      if (
+        this.worldSocket ||
+        this.worldSocketConnecting ||
+        !this.worldSocketShouldReconnect
+      ) {
+        return
+      }
+      if (this.worldSocketReconnectTimer) {
+        clearTimeout(this.worldSocketReconnectTimer)
+        this.worldSocketReconnectTimer = null
+      }
+      this.worldSocketConnecting = true
       try {
+        const {data} = await LNbits.api.request(
+          'GET',
+          `/market_town/api/v1/public/world/${this.worldId}/ws`,
+          null
+        )
+        if (!this.worldSocketShouldReconnect) return
         const url = new URL(window.location)
         url.protocol = url.protocol === 'https:' ? 'wss' : 'ws'
-        url.pathname = `/api/v1/ws/market-town-public-${this.worldId}`
-        this.worldSocket = new WebSocket(url)
-        this.worldSocket.onmessage = () => {
+        url.pathname = `/api/v1/ws/${data.channel}`
+        const socket = new WebSocket(url)
+        this.worldSocket = socket
+        socket.onopen = () => {
+          if (this.worldSocket !== socket) return
+          this.worldSocketReconnectDelayMs = 1000
+          this.markPublicRealtime('live')
+        }
+        socket.onmessage = () => {
           this.fetchWorldState()
-          if (this.agentSession && this.agentLookup.apiKey) {
-            this.loadAgentSession()
+        }
+        socket.onclose = () => {
+          if (this.worldSocket === socket) {
+            this.worldSocket = null
           }
+          this.markPublicRealtime('stale')
+          this.scheduleWorldSocketReconnect()
         }
-        this.worldSocket.onclose = () => {
-          this.worldSocket = null
-        }
-        this.worldSocket.onerror = () => {
-          Quasar.Notify.create({
-            type: 'warning',
-            message:
-              'World websocket disconnected. Refresh the page to reconnect.'
-          })
+        socket.onerror = () => {
+          this.markPublicRealtime('stale')
         }
       } catch (error) {
+        this.markPublicRealtime('stale')
+        this.scheduleWorldSocketReconnect()
         console.warn('Market Town world websocket failed', error)
+      } finally {
+        this.worldSocketConnecting = false
       }
     },
     connectPaymentSocket(paymentHash) {
@@ -295,12 +354,23 @@ window.PageMarketTownPublic = {
         url.pathname = `/api/v1/ws/${paymentHash}`
         this.paymentSocket = new WebSocket(url)
         this.paymentSocket.onmessage = async event => {
-          const payload = JSON.parse(event.data)
+          let payload
+          try {
+            payload = JSON.parse(event.data)
+          } catch (error) {
+            return
+          }
+          if (!payload || typeof payload !== 'object') return
           if (payload.pending === false) {
             this.claimState.status = payload.status
             await this.fetchWorldState()
-            if (this.claimState.claim_token) {
+            if (payload.status === 'paid' && this.claimState.claim_token) {
               await this.revealCredentials(this.claimState.claim_token)
+            } else if (payload.status === 'paid_unclaimed') {
+              Quasar.Notify.create({
+                type: 'warning',
+                message: 'Payment received, but the selected district is full.'
+              })
             }
             this.paymentSocket.close()
             this.paymentSocket = null
@@ -326,6 +396,11 @@ window.PageMarketTownPublic = {
     this.fetchWorldState()
   },
   beforeUnmount() {
+    this.worldSocketShouldReconnect = false
+    if (this.worldSocketReconnectTimer) {
+      clearTimeout(this.worldSocketReconnectTimer)
+      this.worldSocketReconnectTimer = null
+    }
     if (this.worldSocket) {
       this.worldSocket.onclose = null
       this.worldSocket.close()

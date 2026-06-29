@@ -37,13 +37,17 @@ class BusinessTypeConfig(MarketTownBaseModel):
     quality_floor_sat: int = Field(default=0, ge=0)
 
 
-class ActionPayload(MarketTownBaseModel):
+class ActionPayload(BaseModel):
     epoch: int = Field(ge=0)
-    business_id: str
-    price_sat: int = Field(ge=1)
-    restock_units: int = Field(default=0, ge=0)
-    maintenance_budget_sat: int = Field(default=0, ge=0)
-    quality_budget_sat: int = Field(default=0, ge=0)
+    business_id: str = Field(min_length=1, max_length=128)
+    price_sat: int = Field(ge=1, le=1_000_000)
+    restock_units: int = Field(default=0, ge=0, le=100_000)
+    maintenance_budget_sat: int = Field(default=0, ge=0, le=1_000_000)
+    quality_budget_sat: int = Field(default=0, ge=0, le=1_000_000)
+
+    class Config:
+        extra = "forbid"
+        allow_population_by_field_name = True
 
 
 class LeaderboardEntry(MarketTownBaseModel):
@@ -426,9 +430,12 @@ class SeasonResult(BaseModel):
 class ClaimBusinessRequest(BaseModel):
     world_id: str | None = None
     display_name: str = Field(min_length=1, max_length=80)
-    district_id: str
-    business_type_id: str
+    district_id: str = Field(min_length=1, max_length=128)
+    business_type_id: str = Field(min_length=1, max_length=128)
     payout_lnaddress: str = Field(min_length=3, max_length=254)
+
+    class Config:
+        extra = "forbid"
 
 
 class PaymentRequestRecord(BaseModel):
@@ -445,6 +452,7 @@ class PaymentRequestRecord(BaseModel):
     prize_pool_amount_sat: int = 0
     lnbits_tribute_amount_sat: int = 0
     status: str = "pending"
+    reservation_expires_at: datetime | None = None
     claim_token: str
     agent_id: str | None = None
     business_id: str | None = None
