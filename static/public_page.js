@@ -29,6 +29,11 @@ window.PageMarketTownPublic = {
       agentDialog: {
         show: false
       },
+      agentHandoff: {
+        displayName: '',
+        payoutLnAddress: '',
+        paymentMode: 'operator_paid'
+      },
       claimDialog: {
         show: false,
         data: {
@@ -167,9 +172,75 @@ window.PageMarketTownPublic = {
           align: 'right'
         }
       ]
+    },
+    agentSkillUrl() {
+      return 'https://raw.githubusercontent.com/lnbits/market_town/main/market-town-player/SKILL.md'
+    },
+    agentSkillGithubUrl() {
+      return 'https://github.com/lnbits/market_town/blob/main/market-town-player/SKILL.md'
+    },
+    agentHandoffPublicWorldUrl() {
+      return window.location.href
+    },
+    agentHandoffBaseUrl() {
+      return window.location.origin
+    },
+    agentHandoffMaxOpeningFeeSat() {
+      const fees = this.publicState.business_types.map(
+        item => item.open_fee_sat || 0
+      )
+      return fees.length ? Math.max(...fees) : 0
+    },
+    cleanAgentHandoffDisplayName() {
+      return this.cleanAgentHandoffValue(
+        this.agentHandoff.displayName,
+        '<DISPLAY_NAME>'
+      )
+    },
+    cleanAgentHandoffPayoutLnAddress() {
+      return this.cleanAgentHandoffValue(
+        this.agentHandoff.payoutLnAddress,
+        '<PAYOUT_LNADDRESS>'
+      )
+    },
+    agentPrompt() {
+      const mode = this.agentHandoff.paymentMode
+      return [
+        'You are a Market Town player agent. Your goal is to open and operate a business in the world below.',
+        '',
+        'World context:',
+        `- LNBITS_BASE_URL: ${this.agentHandoffBaseUrl}`,
+        `- WORLD_ID: ${this.worldId}`,
+        `- PUBLIC_WORLD_URL: ${this.agentHandoffPublicWorldUrl}`,
+        `- RAW_SKILL_URL: ${this.agentSkillUrl}`,
+        '',
+        'Operator configuration:',
+        `- DISPLAY_NAME: ${this.cleanAgentHandoffDisplayName}`,
+        `- PAYOUT_LNADDRESS: ${this.cleanAgentHandoffPayoutLnAddress}`,
+        `- PAYMENT_MODE: ${mode}`,
+        `- MAX_OPENING_FEE_SAT: ${this.agentHandoffMaxOpeningFeeSat}`,
+        '',
+        'Instructions:',
+        '1. If you can fetch URLs, read the skill at RAW_SKILL_URL first and follow its operational rules.',
+        '2. If you cannot fetch URLs, use this workflow:',
+        '   a. Read the public world state at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID.',
+        '   b. Create a claim at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID/claim with the operator configuration above, plus a district_id and business_type_id of your choice.',
+        `   c. If PAYMENT_MODE is agent_paid, pay the opening-fee invoice yourself. If PAYMENT_MODE is operator_paid, ask the operator to pay it. Never spend more than MAX_OPENING_FEE_SAT sats without explicit confirmation.`,
+        '   d. After the invoice settles, reveal credentials using the claim_token returned in the claim response.',
+        '   e. Use the issued API key to fetch the private agent session and submit one valid action per epoch before the cutoff.',
+        '3. Keep the API key, claim token, and wallet credentials secret and secure.',
+        '',
+        'Do not reveal credentials or make payments until the world state and claim response are confirmed.'
+      ].join('\n')
     }
   },
   methods: {
+    cleanAgentHandoffValue(value, fallback) {
+      const cleanValue = String(value || '')
+        .replace(/[\r\n]+/g, ' ')
+        .trim()
+      return cleanValue || fallback
+    },
     satLabel(value) {
       return LNbits.utils.formatBalance(value || 0, 'sats')
     },
@@ -238,6 +309,20 @@ window.PageMarketTownPublic = {
     copyInvoice() {
       if (!this.claimState.payment_request) return
       LNbits.utils.copyText(this.claimState.payment_request)
+    },
+    copyAgentPrompt() {
+      LNbits.utils.copyText(this.agentPrompt)
+      Quasar.Notify.create({
+        type: 'positive',
+        message: 'Agent prompt copied.'
+      })
+    },
+    copyAgentSkillUrl() {
+      LNbits.utils.copyText(this.agentSkillUrl)
+      Quasar.Notify.create({
+        type: 'positive',
+        message: 'Agent skill URL copied.'
+      })
     },
     async revealCredentials(claimToken) {
       try {
