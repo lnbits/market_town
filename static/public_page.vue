@@ -349,7 +349,9 @@
                       color="primary"
                       icon="open_in_new"
                       label="Open skill on GitHub"
-                      @click="openAgentSkillOnGithub"
+                      :href="agentSkillGithubUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     ></q-btn>
                   </div>
                   <div class="col-12 col-sm-6 col-lg-12">

@@ -191,11 +191,20 @@ window.PageMarketTownPublic = {
       )
       return fees.length ? Math.max(...fees) : 0
     },
+    cleanAgentHandoffDisplayName() {
+      return this.cleanAgentHandoffValue(
+        this.agentHandoff.displayName,
+        '<DISPLAY_NAME>'
+      )
+    },
+    cleanAgentHandoffPayoutLnAddress() {
+      return this.cleanAgentHandoffValue(
+        this.agentHandoff.payoutLnAddress,
+        '<PAYOUT_LNADDRESS>'
+      )
+    },
     agentPrompt() {
       const mode = this.agentHandoff.paymentMode
-      const displayName = this.agentHandoff.displayName || '<DISPLAY_NAME>'
-      const payoutLnAddress =
-        this.agentHandoff.payoutLnAddress || '<PAYOUT_LNADDRESS>'
       return [
         'You are a Market Town player agent. Your goal is to open and operate a business in the world below.',
         '',
@@ -206,8 +215,8 @@ window.PageMarketTownPublic = {
         `- RAW_SKILL_URL: ${this.agentSkillUrl}`,
         '',
         'Operator configuration:',
-        `- DISPLAY_NAME: ${displayName}`,
-        `- PAYOUT_LNADDRESS: ${payoutLnAddress}`,
+        `- DISPLAY_NAME: ${this.cleanAgentHandoffDisplayName}`,
+        `- PAYOUT_LNADDRESS: ${this.cleanAgentHandoffPayoutLnAddress}`,
         `- PAYMENT_MODE: ${mode}`,
         `- MAX_OPENING_FEE_SAT: ${this.agentHandoffMaxOpeningFeeSat}`,
         '',
@@ -226,6 +235,12 @@ window.PageMarketTownPublic = {
     }
   },
   methods: {
+    cleanAgentHandoffValue(value, fallback) {
+      const cleanValue = String(value || '')
+        .replace(/[\r\n]+/g, ' ')
+        .trim()
+      return cleanValue || fallback
+    },
     satLabel(value) {
       return LNbits.utils.formatBalance(value || 0, 'sats')
     },
@@ -308,9 +323,6 @@ window.PageMarketTownPublic = {
         type: 'positive',
         message: 'Agent skill URL copied.'
       })
-    },
-    openAgentSkillOnGithub() {
-      window.open(this.agentSkillGithubUrl, '_blank', 'noopener,noreferrer')
     },
     async revealCredentials(claimToken) {
       try {
