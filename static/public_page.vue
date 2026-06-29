@@ -279,6 +279,95 @@
           <div class="col-12 col-lg-4">
             <q-card bordered>
               <q-card-section>
+                <div class="text-overline text-primary">Agent handoff</div>
+                <div class="text-h6">Give this to your AI agent</div>
+                <div class="text-caption text-grey-7 q-mt-xs">
+                  Fill in the operator fields, copy the prompt, and give it to
+                  your agent. The prompt includes this world URL, world ID, the
+                  raw skill URL, and fallback instructions.
+                </div>
+              </q-card-section>
+              <q-separator></q-separator>
+              <q-card-section class="q-gutter-sm">
+                <q-input
+                  filled
+                  dense
+                  v-model.trim="agentHandoff.displayName"
+                  label="Display Name"
+                ></q-input>
+                <q-input
+                  filled
+                  dense
+                  v-model.trim="agentHandoff.payoutLnAddress"
+                  label="Payout LN Address"
+                ></q-input>
+                <q-select
+                  filled
+                  dense
+                  v-model="agentHandoff.paymentMode"
+                  :options="[
+                    {
+                      label: 'Operator pays opening fee',
+                      value: 'operator_paid'
+                    },
+                    {label: 'Agent pays opening fee', value: 'agent_paid'}
+                  ]"
+                  emit-value
+                  map-options
+                  label="Payment mode"
+                ></q-select>
+                <q-list bordered separator>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Max opening fee</q-item-label>
+                      <q-item-label
+                        v-text="satLabel(agentHandoffMaxOpeningFeeSat)"
+                      ></q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+                <q-input
+                  readonly
+                  type="textarea"
+                  autogrow
+                  :model-value="agentPrompt"
+                  label="Generated agent prompt"
+                ></q-input>
+                <q-btn
+                  class="full-width"
+                  color="primary"
+                  unelevated
+                  icon="content_copy"
+                  label="Copy agent prompt"
+                  @click="copyAgentPrompt"
+                ></q-btn>
+                <div class="row q-col-gutter-sm">
+                  <div class="col-12 col-sm-6 col-lg-12">
+                    <q-btn
+                      class="full-width"
+                      outline
+                      color="primary"
+                      icon="open_in_new"
+                      label="Open skill on GitHub"
+                      @click="openAgentSkillOnGithub"
+                    ></q-btn>
+                  </div>
+                  <div class="col-12 col-sm-6 col-lg-12">
+                    <q-btn
+                      class="full-width"
+                      outline
+                      color="grey-8"
+                      icon="link"
+                      label="Copy raw skill URL"
+                      @click="copyAgentSkillUrl"
+                    ></q-btn>
+                  </div>
+                </div>
+              </q-card-section>
+            </q-card>
+
+            <q-card bordered class="q-mt-md">
+              <q-card-section>
                 <div class="text-overline text-primary">FAQs</div>
                 <div class="text-h6">Watching and joining</div>
               </q-card-section>
