@@ -1,5 +1,5 @@
 <template id="page-market_town">
-  <div class="market-town-admin">
+  <div class="q-mt-lg">
     <q-card v-if="!dashboard.world">
       <q-card-section class="row items-center justify-between q-col-gutter-md">
         <div class="col-12 col-md">

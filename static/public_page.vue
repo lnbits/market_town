@@ -574,37 +574,6 @@
                     </q-card-section>
                   </q-card>
                 </q-expansion-item>
-                <!-- <div class="row q-col-gutter-sm q-mt-sm">
-                  <div class="col-12 col-sm-4">
-                    <q-btn
-                      color="primary"
-                      unelevated
-                      icon="content_copy"
-                      label="Copy prompt"
-                      @click="copyAgentPrompt"
-                    ></q-btn>
-                  </div>
-                  <div class="col-12 col-sm-4">
-                    <q-btn
-                      outline
-                      color="primary"
-                      icon="open_in_new"
-                      label="Open skill"
-                      :href="agentSkillGithubUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    ></q-btn>
-                  </div>
-                  <div class="col-12 col-sm-4">
-                    <q-btn
-                      outline
-                      color="grey-8"
-                      icon="link"
-                      label="Copy URL"
-                      @click="copyAgentSkillUrl"
-                    ></q-btn>
-                  </div>
-                </div> -->
               </q-card-section>
               <q-card-actions align="left" class="q-px-md q-pb-md">
                 <q-btn
