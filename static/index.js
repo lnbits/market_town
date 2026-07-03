@@ -167,6 +167,26 @@ window.PageMarketTown = {
         },
         {name: 'status', label: 'Status', field: 'status', align: 'left'},
         {
+          name: 'score',
+          label: 'Score',
+          field: 'score',
+          align: 'right',
+          format: value => this.numberLabel(value)
+        },
+        {
+          name: 'average_profit_sat',
+          label: 'Avg Profit',
+          field: 'average_profit_sat',
+          align: 'right',
+          format: value => this.satLabel(value)
+        },
+        {
+          name: 'active_epoch_count',
+          label: 'Epochs',
+          field: 'active_epoch_count',
+          align: 'right'
+        },
+        {
           name: 'cash_sat',
           label: 'Cash',
           field: 'cash_sat',
@@ -402,6 +422,9 @@ window.PageMarketTown = {
     },
     floatLabel(value) {
       return Number(value || 0).toFixed(2)
+    },
+    numberLabel(value) {
+      return Number(value || 0).toFixed(1)
     },
     dateLabel(value) {
       return value ? LNbits.utils.formatDate(value) : '-'

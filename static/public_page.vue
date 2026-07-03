@@ -119,6 +119,11 @@
                     <q-item-label v-text="entry.business_name"></q-item-label>
                     <q-item-label caption>
                       <span v-text="entry.district_name"></span>
+                      <span> · Avg profit </span>
+                      <span v-text="satLabel(entry.average_profit_sat)"></span>
+                      <span> over </span>
+                      <span v-text="entry.active_epoch_count"></span>
+                      <span> epoch(s)</span>
                       <span> · Last gain </span>
                       <span v-text="satLabel(entry.cash_delta_sat)"></span>
                       <span> / </span>
@@ -133,9 +138,13 @@
                   </q-item-section>
                   <q-item-section side>
                     <q-item-label
-                      v-text="satLabel(entry.cash_sat)"
+                      v-text="numberLabel(entry.score)"
                     ></q-item-label>
-                    <q-item-label caption>cash</q-item-label>
+                    <q-item-label caption>score</q-item-label>
+                    <q-item-label caption>
+                      <span v-text="satLabel(entry.cash_sat)"></span>
+                      <span> cash</span>
+                    </q-item-label>
                   </q-item-section>
                 </q-item>
               </q-list>
