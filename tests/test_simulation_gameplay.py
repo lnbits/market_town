@@ -2,12 +2,15 @@ import asyncio
 
 from market_town.crud import (  # type: ignore[import]
     create_snapshot,
+    get_business,
     get_effective_submission_for_epoch,
     get_epoch,
     list_businesses,
     list_snapshots_for_business,
+    update_business,
     update_epoch,
 )
+from market_town.models import BusinessEpochSnapshot  # type: ignore[import]
 from market_town.services import build_public_world_state, resolve_epoch  # type: ignore[import]
 
 from .simulation_helpers import (
@@ -66,6 +69,70 @@ def test_multiple_agents_join_play_and_epoch_resolves(monkeypatch):
         public_state = await build_public_world_state(world.id)
         assert len(public_state.businesses) == 3
         assert public_state.leaderboard
+
+    asyncio.run(_run())
+
+
+def test_leaderboard_ranks_by_season_performance_score_not_cash(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Fair Leaderboard Market", season_length_epochs=4)
+        district, business_type = await default_claim_options(world.id)
+        early_agent = await create_paid_agent(
+            world,
+            display_name="early-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        late_agent = await create_paid_agent(
+            world,
+            display_name="late-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+
+        early_business = await get_business(early_agent.business_id)
+        late_business = await get_business(late_agent.business_id)
+        assert early_business is not None
+        assert late_business is not None
+
+        await update_business(early_business.copy(update={"cash_sat": 1000, "reputation": 0.5}))
+        await update_business(late_business.copy(update={"cash_sat": 200, "reputation": 0.5}))
+
+        for epoch_number, profit in [(1, 40), (2, 40), (3, 40)]:
+            await create_snapshot(
+                BusinessEpochSnapshot(
+                    id=f"early-{epoch_number}",
+                    world_id=world.id,
+                    epoch_number=epoch_number,
+                    business_id=early_agent.business_id,
+                    profit_sat=profit,
+                    revenue_sat=profit,
+                    cash_before=1000 - profit,
+                    cash_after=1000,
+                )
+            )
+        await create_snapshot(
+            BusinessEpochSnapshot(
+                id="late-3",
+                world_id=world.id,
+                epoch_number=3,
+                business_id=late_agent.business_id,
+                profit_sat=220,
+                revenue_sat=220,
+                cash_before=-20,
+                cash_after=200,
+            )
+        )
+
+        public_state = await build_public_world_state(world.id)
+        assert [entry.business_name for entry in public_state.leaderboard[:2]] == [
+            "late-agent",
+            "early-agent",
+        ]
+        assert public_state.leaderboard[0].score > public_state.leaderboard[1].score
+        assert public_state.leaderboard[0].active_epoch_count == 1
+        assert public_state.leaderboard[0].average_profit_sat == 220
 
     asyncio.run(_run())
 

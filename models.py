@@ -55,6 +55,9 @@ class LeaderboardEntry(MarketTownBaseModel):
     agent_id: str
     business_name: str
     district_name: str
+    score: float = 0
+    average_profit_sat: float = 0
+    active_epoch_count: int = 0
     cash_sat: int = 0
     cash_delta_sat: int = 0
     cash_delta_percent: float | None = None
@@ -325,6 +328,9 @@ class BusinessBoardItem(BaseModel):
     district_name: str
     business_type_name: str
     status: str
+    score: float = 0
+    average_profit_sat: float = 0
+    active_epoch_count: int = 0
     cash_sat: int
     reputation: float
     reliability: float

@@ -790,19 +790,51 @@ async def build_admin_dashboard(user_id: str) -> AdminDashboard | None:
     )
 
 
+def _season_epoch_start(world: World) -> int:
+    season_number = world.current_season_number or season_number_for_epoch(
+        world, max(1, world.current_epoch_number)
+    )
+    if season_number <= 0:
+        return 1
+    return ((season_number - 1) * world.season_length_epochs) + 1
+
+
+def _leaderboard_score(
+    average_profit_sat: float,
+    reputation: float,
+    reliability: float,
+    quality_level: float,
+) -> float:
+    return average_profit_sat + (reputation * 50) + (reliability * 30) + (quality_level * 20)
+
+
 async def build_business_board(world: World) -> list[BusinessBoardItem]:
     districts = {district.id: district for district in await list_districts(world.id)}
     business_types = {item.id: item for item in await list_business_types(world.id)}
+    season_epoch_start = _season_epoch_start(world)
     items: list[BusinessBoardItem] = []
     for business in await list_businesses(world.id):
         district = districts.get(business.district_id)
         business_type = business_types.get(business.business_type_id)
-        latest_snapshots = await list_snapshots_for_business(business.id, limit=1)
-        latest_snapshot = latest_snapshots[0] if latest_snapshots else None
+        snapshots = await list_snapshots_for_business(business.id, limit=max(1, world.season_length_epochs))
+        season_snapshots = [snapshot for snapshot in snapshots if snapshot.epoch_number >= season_epoch_start]
+        latest_snapshot = season_snapshots[0] if season_snapshots else None
         cash_delta_sat = latest_snapshot.cash_after - latest_snapshot.cash_before if latest_snapshot else 0
         cash_delta_percent = None
         if latest_snapshot and latest_snapshot.cash_before != 0:
             cash_delta_percent = (cash_delta_sat / abs(latest_snapshot.cash_before)) * 100
+        active_epoch_count = len(season_snapshots)
+        average_profit_sat = (
+            sum(snapshot.profit_sat for snapshot in season_snapshots) / active_epoch_count
+            if active_epoch_count
+            else 0
+        )
+        score = _leaderboard_score(
+            average_profit_sat,
+            business.reputation,
+            business.reliability,
+            business.quality_level,
+        )
         items.append(
             BusinessBoardItem(
                 business_id=business.id,
@@ -812,6 +844,9 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
                 district_name=district.name if district else business.district_id,
                 business_type_name=business_type.name if business_type else business.business_type_id,
                 status=business.status,
+                score=score,
+                average_profit_sat=average_profit_sat,
+                active_epoch_count=active_epoch_count,
                 cash_sat=business.cash_sat,
                 reputation=business.reputation,
                 reliability=business.reliability,
@@ -826,7 +861,7 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
                 latest_snapshot_epoch=latest_snapshot.epoch_number if latest_snapshot else None,
             )
         )
-    items.sort(key=lambda item: (item.status != "active", -item.cash_sat, -item.reputation))
+    items.sort(key=lambda item: (item.status != "active", -item.score, -item.cash_sat, -item.reputation))
     return items
 
 
@@ -839,6 +874,9 @@ def build_leaderboard(items: list[BusinessBoardItem]) -> list[LeaderboardEntry]:
                 agent_id=item.agent_id,
                 business_name=item.display_name,
                 district_name=item.district_name,
+                score=item.score,
+                average_profit_sat=item.average_profit_sat,
+                active_epoch_count=item.active_epoch_count,
                 cash_sat=item.cash_sat,
                 cash_delta_sat=item.cash_delta_sat,
                 cash_delta_percent=item.cash_delta_percent,

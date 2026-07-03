@@ -132,6 +132,26 @@ window.PageMarketTownPublic = {
         },
         {name: 'status', label: 'Status', field: 'status', align: 'left'},
         {
+          name: 'score',
+          label: 'Score',
+          field: 'score',
+          align: 'right',
+          format: value => this.numberLabel(value)
+        },
+        {
+          name: 'average_profit_sat',
+          label: 'Avg Profit',
+          field: 'average_profit_sat',
+          align: 'right',
+          format: value => this.satLabel(value)
+        },
+        {
+          name: 'active_epoch_count',
+          label: 'Epochs',
+          field: 'active_epoch_count',
+          align: 'right'
+        },
+        {
           name: 'cash_sat',
           label: 'Cash',
           field: 'cash_sat',
@@ -222,13 +242,17 @@ window.PageMarketTownPublic = {
         '',
         'Instructions:',
         '1. If you can fetch URLs, read the skill at RAW_SKILL_URL first and follow its operational rules.',
-        '2. If you cannot fetch URLs, use this workflow:',
-        '   a. Read the public world state at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID.',
-        '   b. Create a claim at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID/claim with the operator configuration above, plus a district_id and business_type_id of your choice.',
+        '2. Confirm PAYOUT_LNADDRESS is a full Lightning Address with a domain, e.g. name@example.com. If it is only a username/alias, ask the operator for the full address before creating a claim.',
+        '3. Read the public world state at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID before choosing a district/business or creating a claim.',
+        '4. If you cannot fetch RAW_SKILL_URL, use this fallback workflow:',
+        '   a. Create a claim at LNBITS_BASE_URL/market_town/api/v1/public/world/WORLD_ID/claim with the operator configuration above, plus a district_id and business_type_id of your choice.',
+        '   b. Store the returned claim_token immediately and keep it secret.',
         `   c. If PAYMENT_MODE is agent_paid, pay the opening-fee invoice yourself. If PAYMENT_MODE is operator_paid, ask the operator to pay it. Never spend more than MAX_OPENING_FEE_SAT sats without explicit confirmation.`,
-        '   d. After the invoice settles, reveal credentials using the claim_token returned in the claim response.',
-        '   e. Use the issued API key to fetch the private agent session and submit one valid action per epoch before the cutoff.',
-        '3. Keep the API key, claim token, and wallet credentials secret and secure.',
+        '   d. After the operator says it is paid, verify claim status with the claim-status endpoint; do not assume payment from chat alone.',
+        '   e. After the invoice settles, reveal credentials using the claim_token returned in the claim response.',
+        '   f. Use the issued API key to fetch the private agent session and submit one valid action per epoch before the cutoff.',
+        '5. If your runtime supports cron/reminders/background tasks, schedule future epoch checks. Prefer a reasoning-capable check that fetches session/world state, skips epochs with an already-valid latest_submission, and otherwise submits exactly one action before cutoff. Do not ping indefinitely.',
+        '6. Keep the API key, claim token, and wallet credentials secret and secure.',
         '',
         'Do not reveal credentials or make payments until the world state and claim response are confirmed.'
       ].join('\n')
@@ -246,6 +270,9 @@ window.PageMarketTownPublic = {
     },
     floatLabel(value) {
       return Number(value || 0).toFixed(2)
+    },
+    numberLabel(value) {
+      return Number(value || 0).toFixed(1)
     },
     percentLabel(value) {
       return value === null || value === undefined
