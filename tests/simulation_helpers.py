@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
+from lnbits.core.models import Payment
+from lnbits.core.models.payments import PaymentState
 from market_town.crud import (
     create_epoch,
     get_world_by_id,
@@ -55,7 +57,16 @@ def patch_lightning(monkeypatch):
 
     async def fake_pay_invoice(**kwargs):
         calls.paid_invoices.append(kwargs)
-        return SimpleNamespace(ok=True, payment_hash=f"paid-{uuid4().hex}")
+        payment_hash = f"paid-{uuid4().hex}"
+        return Payment(
+            checking_id=payment_hash,
+            payment_hash=payment_hash,
+            wallet_id=kwargs["wallet_id"],
+            amount=-(kwargs["max_sat"] or 0) * 1000,
+            fee=0,
+            bolt11=kwargs["payment_request"],
+            status=PaymentState.SUCCESS.value,
+        )
 
     async def fake_pay_tribute(tribute: int, wallet_id: str):
         calls.tributes.append({"tribute": tribute, "wallet_id": wallet_id})

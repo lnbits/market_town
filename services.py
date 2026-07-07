@@ -537,9 +537,9 @@ async def _settle_single_season_payout(
             tag="market_town_season_payout",
         )
         payout["payment_hash"] = payment.payment_hash
-        if getattr(payment, "pending", False) or getattr(payment, "failed", False):
+        if payment.pending or payment.failed:
             payout["status"] = "failed"
-            payout["error"] = f"Payment status is {getattr(payment, 'status', 'unknown')}."
+            payout["error"] = f"Payment status is {payment.status}."
         else:
             payout["status"] = "paid"
     except Exception as exc:
