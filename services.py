@@ -98,6 +98,7 @@ from .models import (
     CreateBusinessType,
     CreateDistrict,
     CreateWorld,
+    DelayedReasoningEntry,
     District,
     Epoch,
     EpochDigest,
@@ -112,6 +113,7 @@ from .models import (
     SafeAgent,
     SeasonResult,
     SubmissionAccepted,
+    SubmissionView,
     UpdateBusinessType,
     UpdateDistrict,
     UpdateWorld,
@@ -124,6 +126,7 @@ runtime_locks: dict[str, asyncio.Lock] = {}
 settlement_locks: dict[str, asyncio.Lock] = {}
 LNBITS_TRIBUTE_PERCENT = 2.0
 LNBITS_TRIBUTE_ADDRESS = "lnbits@nostr.com"
+REASONING_DELAY_EPOCHS = 2
 
 DEFAULT_DISTRICTS: list[CreateDistrict] = [
     CreateDistrict(
@@ -745,7 +748,7 @@ async def maybe_progress_world_events(world: World) -> World:
     if world.active_event_remaining_epochs > 0:
         return world
     rng = Random(f"{world.world_seed}:{world.current_epoch_number}")
-    if rng.random() >= 0.03:
+    if rng.random() >= 0.10:
         return world
     event_id, event_name, multiplier = EVENT_CATALOG[rng.randrange(len(EVENT_CATALOG))]
     duration = rng.randint(1, 3)
@@ -914,6 +917,42 @@ def build_leaderboard(items: list[BusinessBoardItem]) -> list[LeaderboardEntry]:
     return leaderboard
 
 
+async def _build_delayed_reasoning(world: World, board: list[BusinessBoardItem]) -> list[DelayedReasoningEntry]:
+    cutoff_epoch = world.current_epoch_number - REASONING_DELAY_EPOCHS
+    if cutoff_epoch < 1:
+        return []
+    business_names = {item.business_id: item.display_name for item in board}
+    submissions = await list_submissions(world.id, limit=100)
+    latest_by_business_epoch: dict[tuple[str, int], SubmissionView] = {}
+    for submission in submissions:
+        if not submission.is_valid:
+            continue
+        reasoning = (submission.payload.reasoning or "").strip()
+        if not reasoning:
+            continue
+        if submission.epoch_number > cutoff_epoch:
+            continue
+        key = (submission.business_id, submission.epoch_number)
+        existing = latest_by_business_epoch.get(key)
+        if existing is None or submission.submitted_at > existing.submitted_at:
+            latest_by_business_epoch[key] = submission
+    chosen = sorted(
+        latest_by_business_epoch.values(),
+        key=lambda sub: sub.submitted_at,
+        reverse=True,
+    )[:20]
+    return [
+        DelayedReasoningEntry(
+            business_id=sub.business_id,
+            business_name=business_names.get(sub.business_id, sub.business_id),
+            epoch_number=sub.epoch_number,
+            reasoning=sub.payload.reasoning or "",
+            submitted_at=sub.submitted_at,
+        )
+        for sub in chosen
+    ]
+
+
 async def build_public_world_state(world_id: str) -> PublicWorldState:
     world = await get_world_by_id(world_id)
     if not world:
@@ -932,13 +971,14 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
             world_id=world.id,
             epoch_number=epoch.epoch_number,
             season_number=epoch.season_number,
-            active_event_name=world.active_event_name,
+            active_event_name=epoch.event_summary_text,
             resolved_business_count=len(board),
             top_businesses=build_leaderboard(board)[:3],
             summary=epoch.digest_text or epoch.event_summary_text or "",
         )
         for epoch in epochs
     ]
+    delayed_reasoning = await _build_delayed_reasoning(world, board)
     return PublicWorldState(
         world=PublicWorld(
             id=world.id,
@@ -964,6 +1004,7 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
         businesses=board,
         leaderboard=build_leaderboard(board),
         recent_digests=recent_digests,
+        delayed_reasoning=delayed_reasoning,
     )
 
 
@@ -1272,14 +1313,16 @@ async def _resolve_single_business(
     reliability_after = clamp(reliability_before + _reliability_delta(maintenance_budget_sat), 0.0, 1.5)
     quality_after = clamp(quality_before + _quality_delta(quality_budget_sat), 0.0, 1.5)
     reputation_after = reputation_before
-    if units_sold < allocated:
+    if payload is None:
+        reputation_after -= 0.02
+    elif units_sold <= 0:
         reputation_after -= 0.03
+    elif stock_after == 0:
+        reputation_after += 0.02
     else:
         reputation_after += 0.01
-    if payload is None:
-        reputation_after -= 0.01
-    if price_sat > (business_type.base_unit_cost_sat * 4) and quality_after < 0.5:
-        reputation_after -= 0.02
+    if price_sat > (business_type.base_unit_cost_sat * 4):
+        reputation_after -= 0.01 if quality_after >= 0.5 else 0.03
     reputation_after = clamp(reputation_after, 0.0, 1.5)
     status = business.status
     missed_epochs = business.missed_epochs + (0 if payload else 1)

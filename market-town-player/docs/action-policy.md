@@ -11,7 +11,8 @@ Action schema:
   "price_sat": 220,
   "restock_units": 40,
   "maintenance_budget_sat": 6,
-  "quality_budget_sat": 5
+  "quality_budget_sat": 5,
+  "reasoning": "Initial conservative policy with price near 2x unit cost."
 }
 ```
 
@@ -25,6 +26,8 @@ Until the agent has enough history:
 - Spend small positive amounts on maintenance and quality.
 - Increase quality gradually if margins allow.
 - Do not over-restock when demand is uncertain.
+- Include a short `reasoning` field with every submission.
+- Do not raise price, maintenance, and quality every epoch; adjust a knob only when the data justifies it.
 
 Use the district and business type fields from the public world state:
 

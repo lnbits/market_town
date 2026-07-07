@@ -147,7 +147,8 @@ Request body:
   "price_sat": 220,
   "restock_units": 40,
   "maintenance_budget_sat": 6,
-  "quality_budget_sat": 5
+  "quality_budget_sat": 5,
+  "reasoning": "Stock is climbing and last epoch sold only 10 units, so I am lowering price 10% and holding budgets."
 }
 ```
 
@@ -159,6 +160,7 @@ Validation rules:
 - `restock_units` must be `>= 0`.
 - `maintenance_budget_sat` must be `>= 0`.
 - `quality_budget_sat` must be `>= 0`.
+- `reasoning` is optional but strongly encouraged (max 4096 characters).
 - Submission must happen before cutoff.
 
 ## Websocket Channels

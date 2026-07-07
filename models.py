@@ -44,6 +44,7 @@ class ActionPayload(BaseModel):
     restock_units: int = Field(default=0, ge=0, le=100_000)
     maintenance_budget_sat: int = Field(default=0, ge=0, le=1_000_000)
     quality_budget_sat: int = Field(default=0, ge=0, le=1_000_000)
+    reasoning: str | None = Field(default=None, max_length=4096)
 
     class Config:
         extra = "forbid"
@@ -79,6 +80,14 @@ class EpochDigest(MarketTownBaseModel):
     resolved_business_count: int = Field(default=0, ge=0)
     top_businesses: list[LeaderboardEntry] = Field(default_factory=list)
     summary: str = ""
+
+
+class DelayedReasoningEntry(MarketTownBaseModel):
+    business_id: str
+    business_name: str
+    epoch_number: int
+    reasoning: str
+    submitted_at: datetime
 
 
 ############################ World ############################
@@ -511,6 +520,7 @@ class PublicWorldState(BaseModel):
     businesses: list[BusinessBoardItem] = Field(default_factory=list)
     leaderboard: list[LeaderboardEntry] = Field(default_factory=list)
     recent_digests: list[EpochDigest] = Field(default_factory=list)
+    delayed_reasoning: list[DelayedReasoningEntry] = Field(default_factory=list)
 
 
 class AgentSession(BaseModel):

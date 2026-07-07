@@ -11,16 +11,13 @@
                 v-text="publicState.world.name"
               ></div>
               <div class="text-subtitle1 q-mt-sm">
-                <template v-if="publicState.current_epoch">
-                  Epoch
-                  <span v-text="publicState.current_epoch.epoch_number"></span>
-                  · Season
-                  <span v-text="publicState.world.current_season_number"></span>
-                </template>
-                <template v-else>
-                  Idle until the first business opens
-                </template>
+                <span v-text="marketStory.title"></span>
               </div>
+              <div
+                class="text-body2 q-mt-sm"
+                v-if="marketStory.body"
+                v-text="marketStory.body"
+              ></div>
               <div class="row q-gutter-sm q-mt-md">
                 <q-chip
                   dense
@@ -33,12 +30,16 @@
                   <span v-text="cutoffLabel"></span>
                 </q-chip>
                 <q-chip
-                  v-if="publicState.world.active_event_name"
+                  v-if="marketStory.event"
                   dense
-                  outline
-                  color="grey-7"
+                  color="info"
+                  text-color="white"
+                  icon="event"
                 >
-                  <span v-text="publicState.world.active_event_name"></span>
+                  <span v-text="marketStory.event"></span>
+                  <span v-if="marketStory.eventRemaining != null">
+                    · {{ marketStory.eventRemaining }} left
+                  </span>
                 </q-chip>
                 <q-chip
                   v-if="liveStatus"
@@ -268,17 +269,97 @@
                 <q-item
                   v-for="digest in publicState.recent_digests"
                   :key="digest.epoch_number"
+                  class="q-py-md"
                 >
                   <q-item-section>
-                    <q-item-label>
+                    <q-item-label class="text-weight-medium">
                       Epoch <span v-text="digest.epoch_number"></span>
                       <span> · Season </span>
                       <span v-text="digest.season_number"></span>
                     </q-item-label>
                     <q-item-label
                       caption
+                      v-if="digest.active_event_name"
+                      class="q-mt-xs"
+                    >
+                      <q-chip
+                        dense
+                        color="info"
+                        text-color="white"
+                        icon="event"
+                      >
+                        <span v-text="digest.active_event_name"></span>
+                      </q-chip>
+                    </q-item-label>
+                    <q-item-label
+                      caption
                       v-text="digest.summary || 'Digest pending'"
+                      class="q-mt-xs"
                     ></q-item-label>
+                    <q-item-label
+                      caption
+                      v-if="
+                        digest.top_businesses && digest.top_businesses.length
+                      "
+                      class="q-mt-xs text-grey-7"
+                    >
+                      <span>Top performers: </span>
+                      <span
+                        v-for="(entry, idx) in digest.top_businesses"
+                        :key="entry.business_id"
+                      >
+                        <span v-if="idx > 0"> · </span>
+                        <span v-text="entry.business_name"></span>
+                      </span>
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-card>
+
+            <q-card bordered class="q-mt-md">
+              <q-card-section>
+                <div class="text-overline text-primary">Spectator Notes</div>
+                <div class="text-h6">What agents were thinking</div>
+                <div class="text-caption text-grey-7 q-mt-xs">
+                  Reasoning is delayed by
+                  <span v-text="reasoningDelayLabel"></span>
+                  epochs so it does not affect live play.
+                </div>
+              </q-card-section>
+              <q-separator></q-separator>
+              <q-list separator>
+                <q-item
+                  v-if="!publicState.delayed_reasoning.length"
+                  class="q-py-md"
+                >
+                  <q-item-section>
+                    <q-item-label
+                      >No notes available yet. Check back after a few
+                      epochs.</q-item-label
+                    >
+                  </q-item-section>
+                </q-item>
+                <q-item
+                  v-for="entry in publicState.delayed_reasoning"
+                  :key="`${entry.business_id}:${entry.epoch_number}`"
+                  class="q-py-md"
+                >
+                  <q-item-section avatar>
+                    <q-avatar color="grey-3" text-color="grey-9">
+                      <q-icon name="psychology"></q-icon>
+                    </q-avatar>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label v-text="entry.business_name"></q-item-label>
+                    <q-item-label caption>
+                      <span class="text-italic">
+                        “<span v-text="entry.reasoning"></span>”
+                      </span>
+                    </q-item-label>
+                    <q-item-label caption class="text-grey-7">
+                      — Epoch <span v-text="entry.epoch_number"></span>
+                    </q-item-label>
                   </q-item-section>
                 </q-item>
               </q-list>

@@ -138,6 +138,7 @@ async def submit_strategy(
     restock_units: int = 40,
     maintenance_budget_sat: int = 6,
     quality_budget_sat: int = 5,
+    reasoning: str | None = None,
 ):
     return await submit_action(
         world_id,
@@ -149,6 +150,7 @@ async def submit_strategy(
             restock_units=restock_units,
             maintenance_budget_sat=maintenance_budget_sat,
             quality_budget_sat=quality_budget_sat,
+            reasoning=reasoning,
         ),
     )
 

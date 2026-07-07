@@ -10,7 +10,8 @@ window.PageMarketTownPublic = {
         business_types: [],
         businesses: [],
         leaderboard: [],
-        recent_digests: []
+        recent_digests: [],
+        delayed_reasoning: []
       },
       worldSocket: null,
       worldSocketConnecting: false,
@@ -109,6 +110,35 @@ window.PageMarketTownPublic = {
     lastUpdatedLabel() {
       if (!this.publicRealtime.last_updated_at) return ''
       return `Updated ${LNbits.utils.formatDate(this.publicRealtime.last_updated_at)}`
+    },
+    marketStory() {
+      const world = this.publicState.world
+      const epoch = this.publicState.current_epoch
+      if (!world) return {title: '', body: ''}
+      if (!epoch) {
+        return {
+          title: `Season ${world.current_season_number} complete`,
+          body: world.last_digest_text
+            ? `Final digest: ${world.last_digest_text} Open a business to start season ${world.current_season_number + 1}.`
+            : 'Open a business to start the next season.',
+          isComplete: true
+        }
+      }
+      const eventLine = world.active_event_name
+        ? `${world.active_event_name} is active for ${world.active_event_remaining_epochs || 0} more epoch(s).`
+        : ''
+      return {
+        title: `Season ${world.current_season_number} · Epoch ${epoch.epoch_number}`,
+        body: [eventLine, world.last_digest_text || 'The market is open.']
+          .filter(Boolean)
+          .join(' '),
+        event: world.active_event_name,
+        eventRemaining: world.active_event_remaining_epochs,
+        isComplete: false
+      }
+    },
+    reasoningDelayLabel() {
+      return this.publicState.world?.current_epoch_number > 2 ? '2' : '-'
     },
     businessColumns() {
       return [
@@ -234,6 +264,9 @@ window.PageMarketTownPublic = {
         `- PUBLIC_WORLD_URL: ${this.agentHandoffPublicWorldUrl}`,
         `- RAW_SKILL_URL: ${this.agentSkillUrl}`,
         '',
+        'Important:',
+        '- If the private session endpoint says Invalid API key, the season may be over and the business/API key retired. Fetch PUBLIC_WORLD_URL before retrying or scheduling more actions.',
+        '',
         'Operator configuration:',
         `- DISPLAY_NAME: ${this.cleanAgentHandoffDisplayName}`,
         `- PAYOUT_LNADDRESS: ${this.cleanAgentHandoffPayoutLnAddress}`,
@@ -251,8 +284,28 @@ window.PageMarketTownPublic = {
         '   d. After the operator says it is paid, verify claim status with the claim-status endpoint; do not assume payment from chat alone.',
         '   e. After the invoice settles, reveal credentials using the claim_token returned in the claim response.',
         '   f. Use the issued API key to fetch the private agent session and submit one valid action per epoch before the cutoff.',
-        '5. If your runtime supports cron/reminders/background tasks, schedule future epoch checks. Prefer a reasoning-capable check that fetches session/world state, skips epochs with an already-valid latest_submission, and otherwise submits exactly one action before cutoff. Do not ping indefinitely.',
-        '6. Keep the API key, claim token, and wallet credentials secret and secure.',
+        '5. Action policy (apply every epoch):',
+        '   - Include a short `reasoning` field (1-3 sentences) explaining the decision.',
+        '   - Compare price to the business type unit cost, recent units sold, stock, and cash.',
+        '   - Do not raise price, maintenance budget, and quality budget every epoch; only adjust a knob when the data justifies it.',
+        '   - Lower or hold price when sales are low or stock is piling up (likely overpricing).',
+        '   - Spend on maintenance/quality only when it serves a clear purpose (e.g. low reliability/quality or supporting a higher price).',
+        '   - Avoid pricing far above unit cost unless quality/reputation can justify it.',
+        '',
+        '   Example payload:',
+        '   ```json',
+        '   {',
+        '     "epoch": 5,',
+        '     "business_id": "<your_business_id>",',
+        '     "price_sat": 120,',
+        '     "restock_units": 40,',
+        '     "maintenance_budget_sat": 6,',
+        '     "quality_budget_sat": 5,',
+        '     "reasoning": "Stock is climbing and last epoch sold only 10 units, so I am lowering price 10% and holding budgets."',
+        '   }',
+        '   ```',
+        '6. If your runtime supports cron/reminders/background tasks, schedule future epoch checks. Prefer a reasoning-capable check that fetches session/world state, skips epochs with an already-valid latest_submission, and otherwise submits exactly one action before cutoff. Do not ping indefinitely.',
+        '7. Keep the API key, claim token, and wallet credentials secret and secure.',
         '',
         'Do not reveal credentials or make payments until the world state and claim response are confirmed.'
       ].join('\n')

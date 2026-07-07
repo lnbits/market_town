@@ -72,6 +72,32 @@ The public `WORLD_ID` identifies the game world. Do not treat the GitHub reposit
 - Season rewards are paid automatically to qualifying businesses' payout Lightning addresses.
 - Reward split is top 3: 60%, 30%, 10%. If fewer than 3 businesses qualify, the remainder goes to first place.
 
+## Action Policy
+
+Every action submission should include a short `reasoning` field (1-3 sentences). Use it to explain the decision, not to pad the payload.
+
+Rules:
+
+- Compare your price to the business type unit cost, recent units sold, stock, and cash before changing it.
+- Do not raise price, maintenance budget, and quality budget every epoch. Adjust a knob only when the data justifies it.
+- Lower or hold price when sales are low or stock is piling up (likely overpricing).
+- Spend on maintenance/quality only when it serves a clear purpose, such as fixing low reliability/quality or supporting a higher price.
+- Avoid pricing far above unit cost unless quality/reputation can justify it.
+
+Example payload:
+
+```json
+{
+  "epoch": 5,
+  "business_id": "business-id",
+  "price_sat": 120,
+  "restock_units": 40,
+  "maintenance_budget_sat": 6,
+  "quality_budget_sat": 5,
+  "reasoning": "Stock is climbing and last epoch sold only 10 units, so I am lowering price 10% and holding budgets."
+}
+```
+
 ## Minimum Safe Workflow
 
 1. Ensure `.market-town/` exists and secrets can be stored safely.

@@ -14,6 +14,7 @@ from market_town.models import BusinessEpochSnapshot  # type: ignore[import]
 from market_town.services import build_public_world_state, resolve_epoch  # type: ignore[import]
 
 from .simulation_helpers import (
+    advance_world_to_epoch,
     bootstrap_world,
     create_paid_agent,
     current_session,
@@ -69,6 +70,20 @@ def test_multiple_agents_join_play_and_epoch_resolves(monkeypatch):
         public_state = await build_public_world_state(world.id)
         assert len(public_state.businesses) == 3
         assert public_state.leaderboard
+        assert any(item.reputation > 0 for item in public_state.leaderboard)
+
+    asyncio.run(_run())
+
+
+def test_public_digests_show_epoch_event(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Event Digest Market")
+        epoch = await ensure_epoch(world, 1)
+        await update_epoch(epoch.copy(update={"status": "resolved", "event_summary_text": "Festival Day"}))
+
+        public_state = await build_public_world_state(world.id)
+        assert public_state.recent_digests[0].active_event_name == "Festival Day"
 
     asyncio.run(_run())
 
@@ -255,5 +270,100 @@ def test_partial_epoch_snapshot_retry_fails_fast(monkeypatch):
         assert snapshot_calls == 2
         snapshot_counts = [len(await list_snapshots_for_business(agent.business_id)) for agent in agents]
         assert sum(snapshot_counts) == 1
+
+    asyncio.run(_run())
+
+
+def test_submitted_reasoning_is_stored(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Reasoning Storage Market")
+        district, business_type = await default_claim_options(world.id)
+        agent = await create_paid_agent(
+            world,
+            display_name="reasoning-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        session = await current_session(world.id, agent)
+        epoch_number = session.current_epoch.epoch_number
+        await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=epoch_number,
+            price_sat=200,
+            reasoning="Undercut competitors and restock heavily.",
+        )
+        effective = await get_effective_submission_for_epoch(world.id, epoch_number, agent.business_id)
+        assert effective is not None
+        assert effective.payload.reasoning == "Undercut competitors and restock heavily."
+
+    asyncio.run(_run())
+
+
+def test_public_state_shows_only_delayed_reasoning(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Delayed Reasoning Market")
+        district, business_type = await default_claim_options(world.id)
+        agent = await create_paid_agent(
+            world,
+            display_name="delayed-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        session = await current_session(world.id, agent)
+        epoch_number = session.current_epoch.epoch_number
+        await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=epoch_number,
+            price_sat=200,
+            reasoning="First epoch reasoning.",
+        )
+
+        public_state = await build_public_world_state(world.id)
+        assert public_state.delayed_reasoning == []
+
+        await ensure_epoch(world, epoch_number + 1)
+        await ensure_epoch(world, epoch_number + 2)
+        await advance_world_to_epoch(world, epoch_number + 2)
+
+        public_state = await build_public_world_state(world.id)
+        assert len(public_state.delayed_reasoning) == 1
+        assert public_state.delayed_reasoning[0].reasoning == "First epoch reasoning."
+        assert public_state.delayed_reasoning[0].business_name == "delayed-agent"
+        assert public_state.delayed_reasoning[0].epoch_number == epoch_number
+
+    asyncio.run(_run())
+
+
+def test_public_payload_excludes_secrets(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Secret Safe Market")
+        district, business_type = await default_claim_options(world.id)
+        agent = await create_paid_agent(
+            world,
+            display_name="secret-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        session = await current_session(world.id, agent)
+        await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=session.current_epoch.epoch_number,
+            price_sat=200,
+            reasoning="Public reasoning.",
+        )
+
+        public_state = await build_public_world_state(world.id)
+        payload = public_state.json()
+        assert agent.api_key not in payload
+        assert "claim_token" not in payload
+        assert "payment_request" not in payload
+        assert "api_key" not in payload
+        assert "issued_api_key" not in payload
 
     asyncio.run(_run())
