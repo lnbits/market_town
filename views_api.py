@@ -35,6 +35,7 @@ from .models import (
     PaymentStatusResponse,
     PublicWorldState,
     SafeAgent,
+    SeasonResult,
     SubmissionAccepted,
     UpdateBusinessType,
     UpdateDistrict,
@@ -52,6 +53,7 @@ from .services import (
     override_business_status,
     reset_world_seeds,
     resolve_epoch,
+    retry_season_payouts,
     reveal_claim_credentials,
     submit_action,
     to_safe_agent,
@@ -270,6 +272,22 @@ async def api_resolve_epoch(
     world = await require_owned_world(account_id)
     try:
         return await resolve_epoch(world.id, epoch_number)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+
+
+@market_town_api_router.post(
+    "/api/v1/seasons/{season_number}/payouts/retry",
+    response_model=SeasonResult,
+    response_model_exclude_none=True,
+)
+async def api_retry_season_payouts(
+    season_number: int,
+    account_id: AccountId = Depends(check_account_id_exists),
+) -> SeasonResult:
+    world = await require_owned_world(account_id)
+    try:
+        return await retry_season_payouts(world, season_number)
     except ValueError as exc:
         raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
 

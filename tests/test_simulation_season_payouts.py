@@ -225,9 +225,9 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
             if kwargs.get("tag") == "market_town_season_payout" and kwargs["max_sat"] == 396:
                 if not failed_once:
                     failed_once = True
-                    raise ValueError("season payout failed")
+                    return SimpleNamespace(status="pending", pending=True, failed=False, payment_hash="pending-396")
             successful_payout_amounts.append(kwargs["max_sat"])
-            return SimpleNamespace(ok=True, payment_hash=f"paid-{len(successful_payout_amounts)}")
+            return SimpleNamespace(status="success", pending=False, failed=False, payment_hash=f"paid-{len(successful_payout_amounts)}")
 
         monkeypatch.setattr("market_town.services.pay_invoice", flaky_pay_invoice)
 

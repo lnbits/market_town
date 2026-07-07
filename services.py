@@ -533,12 +533,33 @@ async def _settle_single_season_payout(
             description=f"Market Town season {season_result.season_number} payout",
             tag="market_town_season_payout",
         )
-        payout["status"] = "paid"
         payout["payment_hash"] = payment.payment_hash
+        if getattr(payment, "pending", False) or getattr(payment, "failed", False):
+            payout["status"] = "failed"
+            payout["error"] = f"Payment status is {getattr(payment, 'status', 'unknown')}."
+        else:
+            payout["status"] = "paid"
     except Exception as exc:
         payout["status"] = "failed"
         payout["error"] = str(exc)
     return payout
+
+
+async def retry_season_payouts(world: World, season_number: int) -> SeasonResult:
+    season_result = await get_season_result(world.id, season_number)
+    if not season_result:
+        raise ValueError("Season result not found.")
+    if season_result.payout_status == "paid":
+        return season_result
+    leaderboard = [LeaderboardEntry.parse_obj(item) for item in json.loads(season_result.leaderboard_text)]
+    updated = await settle_season_payouts(world, season_result, leaderboard)
+    await create_audit_event(
+        world.id,
+        "season_payout_retry",
+        updated.id,
+        payload={"season_number": season_number, "payout_status": updated.payout_status},
+    )
+    return updated
 
 
 async def seed_defaults(world_id: str, replace: bool = False) -> None:
