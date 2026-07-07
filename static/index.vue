@@ -337,7 +337,21 @@
                 :columns="seasonColumns"
                 row-key="id"
                 :pagination="{rowsPerPage: 10}"
-              ></q-table>
+              >
+                <template v-slot:body-cell-actions="props">
+                  <q-td :props="props">
+                    <q-btn
+                      v-if="['failed', 'partial'].includes(props.row.payout_status)"
+                      dense
+                      flat
+                      color="primary"
+                      icon="refresh"
+                      label="Retry payouts"
+                      @click="retrySeasonPayouts(props.row)"
+                    ></q-btn>
+                  </q-td>
+                </template>
+              </q-table>
             </q-card>
           </q-tab-panel>
         </q-tab-panels>

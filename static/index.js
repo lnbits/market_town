@@ -400,6 +400,12 @@ window.PageMarketTown = {
           field: 'updated_at',
           align: 'left',
           format: value => this.dateLabel(value)
+        },
+        {
+          name: 'actions',
+          label: '',
+          field: 'actions',
+          align: 'right'
         }
       ]
     }
@@ -633,6 +639,18 @@ window.PageMarketTown = {
         await LNbits.api.request(
           'POST',
           '/market_town/api/v1/epochs/resolve',
+          null
+        )
+        await this.fetchDashboard()
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      }
+    },
+    async retrySeasonPayouts(row) {
+      try {
+        await LNbits.api.request(
+          'POST',
+          `/market_town/api/v1/seasons/${row.season_number}/payouts/retry`,
           null
         )
         await this.fetchDashboard()
