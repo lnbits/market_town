@@ -8,7 +8,7 @@ from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import quote
 
-from lnbits.core.services import create_invoice, pay_invoice
+from lnbits.core.services import create_invoice, pay_invoice, update_pending_payment
 from lnbits.helpers import check_callback_url
 from lnbits.settings import settings
 from lnurl import (
@@ -560,6 +560,9 @@ async def _settle_single_season_payout(
             description=f"Market Town season {season_result.season_number} payout",
             tag="market_town_season_payout",
         )
+        if payment.pending:
+            # ponytail: LNbits can return before the funding backend finishes; one status refresh avoids false failed payouts.
+            payment = await update_pending_payment(payment)
         payout["payment_hash"] = payment.payment_hash
         if payment.pending or payment.failed:
             payout["status"] = "failed"

@@ -11,6 +11,7 @@ from market_town.crud import (  # type: ignore[import]
 )
 from market_town.models import Agent, ClaimBusinessRequest, LeaderboardEntry, SeasonResult, World
 from market_town.services import (  # type: ignore[import]
+    _settle_single_season_payout,
     build_public_world_state,
     create_business_claim,
     get_agent_session,
@@ -230,7 +231,11 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
             successful_payout_amounts.append(kwargs["max_sat"])
             return SimpleNamespace(status="success", pending=False, failed=False, payment_hash=f"paid-{len(successful_payout_amounts)}")
 
+        async def keep_pending(payment):
+            return payment
+
         monkeypatch.setattr("market_town.services.pay_invoice", flaky_pay_invoice)
+        monkeypatch.setattr("market_town.services.update_pending_payment", keep_pending)
 
         for index, agent in enumerate(agents):
             await submit_strategy(
@@ -280,6 +285,49 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
         assert successful_payout_amounts.count(792) == 1
         assert successful_payout_amounts.count(396) == 1
         assert successful_payout_amounts.count(132) == 1
+
+    asyncio.run(_run())
+
+
+def test_pending_season_payout_refreshes_before_marking_failed(monkeypatch):
+    async def _run():
+        world = World(id="world", user_id="user", name="World", wallet_id="wallet", world_seed="seed")
+        season_result = SeasonResult(
+            id="season",
+            world_id=world.id,
+            season_number=1,
+            epoch_start=1,
+            epoch_end=1,
+            leaderboard_text="[]",
+        )
+        agent = Agent(
+            id="agent",
+            world_id=world.id,
+            display_name="Agent",
+            api_key_hash="hash",
+            payout_lnaddress="agent@example.com",
+        )
+        refreshed = []
+
+        async def fake_get_pr_from_lnurl(*_args, **_kwargs):
+            return "lnbc1pending"
+
+        async def fake_pay_invoice(**_kwargs):
+            return SimpleNamespace(status="pending", pending=True, failed=False, payment_hash="hash")
+
+        async def fake_update_pending_payment(payment):
+            refreshed.append(payment.payment_hash)
+            return SimpleNamespace(status="success", pending=False, failed=False, payment_hash=payment.payment_hash)
+
+        monkeypatch.setattr("market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl)
+        monkeypatch.setattr("market_town.services.pay_invoice", fake_pay_invoice)
+        monkeypatch.setattr("market_town.services.update_pending_payment", fake_update_pending_payment)
+
+        payout = await _settle_single_season_payout(world, season_result, "business", 21, agent)
+
+        assert refreshed == ["hash"]
+        assert payout["status"] == "paid"
+        assert payout["payment_hash"] == "hash"
 
     asyncio.run(_run())
 
