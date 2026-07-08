@@ -433,7 +433,13 @@ async def settle_season_payouts(
         include_before_start=season_result.season_number == 1,
     )
     prize_pool_sat = sum(item.prize_pool_amount_sat for item in paid_requests)
+    payment_request_ids = [item.id for item in paid_requests]
     payout_amounts = calculate_season_payout_amounts(prize_pool_sat, leaderboard)
+    if not payout_amounts:
+        existing_summary = _season_payout_summary(season_result)
+        prize_pool_sat = existing_summary.get("prize_pool_sat", prize_pool_sat)
+        payment_request_ids = existing_summary.get("payment_request_ids", payment_request_ids)
+        payout_amounts = _season_payout_amounts_by_business_id(season_result)
     businesses = {business.id: business for business in await list_businesses(world.id)}
     agents = {agent.id: agent for agent in await list_agents(world.id)}
     existing_payouts_by_business_id = _season_payouts_by_business_id(season_result)
@@ -469,7 +475,7 @@ async def settle_season_payouts(
     summary = {
         "scheme": "top_3_60_30_10",
         "prize_pool_sat": prize_pool_sat,
-        "payment_request_ids": [item.id for item in paid_requests],
+        "payment_request_ids": payment_request_ids,
         "payouts": payouts,
     }
     return await update_season_result(
@@ -482,20 +488,38 @@ async def settle_season_payouts(
     )
 
 
+def _season_payout_summary(season_result: SeasonResult) -> dict:
+    if not season_result.payout_summary_text:
+        return {}
+    existing_summary = json.loads(season_result.payout_summary_text)
+    if not isinstance(existing_summary, dict):
+        raise ValueError("Season payout summary is invalid.")
+    return existing_summary
+
+
 def _season_payouts_by_business_id(season_result: SeasonResult) -> dict[str, dict]:
     if season_result.payout_status != "partial":
         return {}
     if not season_result.payout_summary_text:
         raise ValueError("Partial season payouts need an existing summary to retry safely.")
-    existing_summary = json.loads(season_result.payout_summary_text)
-    if not isinstance(existing_summary, dict):
-        raise ValueError("Season payout summary is invalid.")
+    existing_summary = _season_payout_summary(season_result)
     payouts: dict[str, dict] = {}
     for item in existing_summary.get("payouts", []):
         business_id = item.get("business_id")
         if business_id and item.get("status") == "paid":
             payouts[business_id] = item
     return payouts
+
+
+def _season_payout_amounts_by_business_id(season_result: SeasonResult) -> dict[str, int]:
+    if season_result.payout_status not in {"failed", "partial"} or not season_result.payout_summary_text:
+        return {}
+    existing_summary = _season_payout_summary(season_result)
+    return {
+        item["business_id"]: item["amount_sat"]
+        for item in existing_summary.get("payouts", [])
+        if item.get("business_id") and item.get("amount_sat", 0) > 0
+    }
 
 
 async def _settle_single_season_payout(

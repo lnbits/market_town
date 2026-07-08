@@ -9,13 +9,14 @@ from market_town.crud import (  # type: ignore[import]
     list_businesses,
     list_season_results,
 )
-from market_town.models import ClaimBusinessRequest
+from market_town.models import Agent, ClaimBusinessRequest, LeaderboardEntry, SeasonResult, World
 from market_town.services import (  # type: ignore[import]
     build_public_world_state,
     create_business_claim,
     get_agent_session,
     payment_received_for_claim,
     resolve_epoch,
+    retry_season_payouts,
     reveal_claim_credentials,
 )
 
@@ -279,6 +280,106 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
         assert successful_payout_amounts.count(792) == 1
         assert successful_payout_amounts.count(396) == 1
         assert successful_payout_amounts.count(132) == 1
+
+    asyncio.run(_run())
+
+
+def test_retry_failed_season_payout_uses_existing_summary_amounts(monkeypatch):
+    async def _run():
+        world = World(
+            id="retry-world",
+            user_id="user",
+            name="Retry World",
+            wallet_id="wallet",
+            world_seed="seed",
+            season_length_epochs=2,
+        )
+        leaderboard = [
+            LeaderboardEntry(
+                business_id="business-1",
+                agent_id="agent-1",
+                business_name="Business 1",
+                district_name="District",
+            )
+        ]
+        season_result = SeasonResult(
+            id="season-1",
+            world_id=world.id,
+            season_number=1,
+            epoch_start=1,
+            epoch_end=2,
+            leaderboard_text=json.dumps([item.dict() for item in leaderboard]),
+            payout_status="failed",
+            payout_summary_text=json.dumps(
+                {
+                    "scheme": "top_3_60_30_10",
+                    "prize_pool_sat": 100,
+                    "payment_request_ids": ["old-request"],
+                    "payouts": [
+                        {
+                            "business_id": "business-1",
+                            "agent_id": "agent-1",
+                            "amount_sat": 100,
+                            "status": "failed",
+                            "payment_hash": None,
+                            "error": "Payment status is pending.",
+                        }
+                    ],
+                }
+            ),
+        )
+        paid_amounts = []
+
+        async def fake_pay_invoice(**kwargs):
+            paid_amounts.append(kwargs["max_sat"])
+            return SimpleNamespace(status="success", pending=False, failed=False, payment_hash="paid-retry")
+
+        async def fake_update(updated):
+            return updated
+
+        async def fake_get_season_result(*_args):
+            return season_result
+
+        async def fake_no_paid_requests(*_args, **_kwargs):
+            return []
+
+        async def fake_businesses(*_args):
+            return [SimpleNamespace(id="business-1", agent_id="agent-1")]
+
+        async def fake_agents(*_args):
+            return [
+                Agent(
+                    id="agent-1",
+                    world_id=world.id,
+                    display_name="Agent",
+                    api_key_hash="hash",
+                    payout_lnaddress="agent@example.com",
+                )
+            ]
+
+        async def fake_get_pr_from_lnurl(*_args, **_kwargs):
+            return "lnbc1retry"
+
+        async def fake_audit(*_args, **_kwargs):
+            return None
+
+        monkeypatch.setattr("market_town.services.get_season_result", fake_get_season_result)
+        monkeypatch.setattr("market_town.services.list_paid_payment_requests_for_season", fake_no_paid_requests)
+        monkeypatch.setattr("market_town.services.list_businesses", fake_businesses)
+        monkeypatch.setattr("market_town.services.list_agents", fake_agents)
+        monkeypatch.setattr("market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl)
+        monkeypatch.setattr("market_town.services.pay_invoice", fake_pay_invoice)
+        monkeypatch.setattr("market_town.services.update_season_result", fake_update)
+        monkeypatch.setattr("market_town.services.create_audit_event", fake_audit)
+
+        updated = await retry_season_payouts(world, 1)
+
+        assert paid_amounts == [100]
+        assert updated.payout_status == "paid"
+        summary = json.loads(updated.payout_summary_text)
+        assert summary["prize_pool_sat"] == 100
+        assert summary["payment_request_ids"] == ["old-request"]
+        assert summary["payouts"][0]["status"] == "paid"
 
     asyncio.run(_run())
 
