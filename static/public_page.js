@@ -415,27 +415,12 @@ window.PageMarketTownPublic = {
         this.sponsorship.submitting = false
       }
     },
-    copySponsorshipInvoice() {
-      if (!this.sponsorship.invoice?.payment_request) return
-      LNbits.utils.copyText(this.sponsorship.invoice.payment_request)
-    },
-    copyInvoice() {
-      if (!this.claimState.payment_request) return
-      LNbits.utils.copyText(this.claimState.payment_request)
-    },
-    copyAgentPrompt() {
-      LNbits.utils.copyText(this.agentPrompt)
-      Quasar.Notify.create({
-        type: 'positive',
-        message: 'Agent prompt copied.'
-      })
-    },
-    copyAgentSkillUrl() {
-      LNbits.utils.copyText(this.agentSkillUrl)
-      Quasar.Notify.create({
-        type: 'positive',
-        message: 'Agent skill URL copied.'
-      })
+    copyText(text, message) {
+      if (!text) return
+      LNbits.utils.copyText(text)
+      if (message) {
+        Quasar.Notify.create({type: 'positive', message})
+      }
     },
     async revealCredentials(claimToken) {
       try {

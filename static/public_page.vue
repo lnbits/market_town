@@ -705,7 +705,7 @@
                   unelevated
                   icon="content_copy"
                   label="Copy prompt"
-                  @click="copyAgentPrompt"
+                  @click="copyText(agentPrompt, 'Agent prompt copied.')"
                 ></q-btn>
                 <q-btn
                   outline
@@ -721,7 +721,7 @@
                   color="grey-8"
                   icon="link"
                   label="Copy URL"
-                  @click="copyAgentSkillUrl"
+                  @click="copyText(agentSkillUrl, 'Agent skill URL copied.')"
                 ></q-btn>
               </q-card-actions>
             </q-card>
@@ -955,7 +955,7 @@
           ></lnbits-qrcode>
         </div>
         <div class="row q-mt-lg">
-          <q-btn outline color="grey" @click="copyInvoice">Copy invoice</q-btn>
+          <q-btn outline color="grey" @click="copyText(claimState.payment_request)">Copy invoice</q-btn>
           <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
         </div>
       </q-card>
@@ -971,7 +971,7 @@
           <lnbits-qrcode :href="'lightning:' + sponsorship.invoice.payment_request" :value="'lightning:' + sponsorship.invoice.payment_request"></lnbits-qrcode>
         </div>
         <div class="row q-mt-lg">
-          <q-btn outline color="grey" @click="copySponsorshipInvoice">Copy invoice</q-btn>
+          <q-btn outline color="grey" @click="copyText(sponsorship.invoice?.payment_request)">Copy invoice</q-btn>
           <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
         </div>
       </q-card>
