@@ -390,7 +390,18 @@ window.PageMarketTownPublic = {
         this.claimDialog.show = false
         this.claimState = data
         this.paymentDialog.show = true
-        this.connectPaymentSocket(data.payment_hash)
+        this.connectPaymentSocket(data.payment_hash, async (payload) => {
+          this.claimState.status = payload.status
+          await this.fetchWorldState()
+          if (payload.status === 'paid' && this.claimState.claim_token) {
+            await this.revealCredentials(this.claimState.claim_token)
+          } else if (payload.status === 'paid_unclaimed') {
+            Quasar.Notify.create({
+              type: 'warning',
+              message: 'Payment received, but the selected district is full.'
+            })
+          }
+        })
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       } finally {
@@ -409,6 +420,10 @@ window.PageMarketTownPublic = {
         )
         this.sponsorship.invoice = data
         this.sponsorship.dialog = true
+        this.connectPaymentSocket(data.payment_hash, () => {
+          this.sponsorship.dialog = false
+          this.fetchWorldState()
+        })
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       } finally {
@@ -526,7 +541,7 @@ window.PageMarketTownPublic = {
         this.worldSocketConnecting = false
       }
     },
-    connectPaymentSocket(paymentHash) {
+    connectPaymentSocket(paymentHash, onPaid) {
       if (this.paymentSocket) {
         this.paymentSocket.onclose = null
         this.paymentSocket.close()
@@ -545,16 +560,7 @@ window.PageMarketTownPublic = {
           }
           if (!payload || typeof payload !== 'object') return
           if (payload.pending === false) {
-            this.claimState.status = payload.status
-            await this.fetchWorldState()
-            if (payload.status === 'paid' && this.claimState.claim_token) {
-              await this.revealCredentials(this.claimState.claim_token)
-            } else if (payload.status === 'paid_unclaimed') {
-              Quasar.Notify.create({
-                type: 'warning',
-                message: 'Payment received, but the selected district is full.'
-              })
-            }
+            await onPaid?.(payload)
             this.paymentSocket.close()
             this.paymentSocket = null
           }
