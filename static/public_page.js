@@ -10,6 +10,8 @@ window.PageMarketTownPublic = {
         business_types: [],
         businesses: [],
         leaderboard: [],
+        all_time_leaderboard: [],
+        season_results: [],
         recent_digests: [],
         delayed_reasoning: [],
         sponsorship_total_sat: 0,
@@ -24,6 +26,7 @@ window.PageMarketTownPublic = {
         status: 'stale',
         last_updated_at: null
       },
+      showHistory: false,
       paymentSocket: null,
       paymentDialog: {
         show: false
@@ -108,6 +111,39 @@ window.PageMarketTownPublic = {
         label: `${item.name} (${this.satLabel(item.open_fee_sat)})`,
         value: item.id
       }))
+    },
+    leaderboardRows() {
+      return this.showHistory
+        ? this.publicState.all_time_leaderboard
+        : this.publicState.leaderboard
+    },
+    businessRows() {
+      if (!this.showHistory) return this.publicState.businesses
+      return this.publicState.season_results.flatMap(result =>
+        result.leaderboard.map(entry => ({
+          business_id: `${result.season_number}-${entry.business_id}`,
+          agent_id: entry.agent_id,
+          display_name: entry.business_name,
+          district_name: entry.district_name,
+          business_type_name: `Season ${result.season_number}`,
+          status: 'closed',
+          score: entry.score,
+          average_profit_sat: entry.average_profit_sat,
+          active_epoch_count: entry.active_epoch_count,
+          cash_sat: entry.cash_sat,
+          cash_delta_sat: entry.cash_delta_sat,
+          latest_profit_sat: entry.latest_profit_sat,
+          latest_units_sold: entry.latest_units_sold,
+          price_sat: entry.price_sat,
+          stock_units: entry.stock_units
+        }))
+      )
+    },
+    historyCaption() {
+      return this.showHistory ? 'All-time high scores' : 'Current live season'
+    },
+    historyToggleLabel() {
+      return 'Show all-time'
     },
     selectedBusinessTypeFee() {
       const item = this.publicState.business_types.find(

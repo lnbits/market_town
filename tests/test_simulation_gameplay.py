@@ -6,6 +6,7 @@ from market_town.crud import (  # type: ignore[import]
     get_effective_submission_for_epoch,
     get_epoch,
     list_businesses,
+    list_season_results,
     list_snapshots_for_business,
     update_business,
     update_epoch,
@@ -365,5 +366,75 @@ def test_public_payload_excludes_secrets(monkeypatch):
         assert "payment_request" not in payload
         assert "api_key" not in payload
         assert "issued_api_key" not in payload
+
+    asyncio.run(_run())
+
+
+def test_public_state_defaults_to_current_season_and_excludes_old_closed_businesses(
+    monkeypatch,
+):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Season Filter Market", season_length_epochs=2)
+        district, business_type = await default_claim_options(world.id)
+        first_agents = [
+            await create_paid_agent(
+                world,
+                display_name=f"s1-agent-{index}",
+                district_id=district.id,
+                business_type_id=business_type.id,
+            )
+            for index in range(2)
+        ]
+
+        for epoch_number in (1, 2):
+            if epoch_number > 1:
+                world = await advance_world_to_epoch(world, epoch_number)
+                await ensure_epoch(world, epoch_number)
+            for agent in first_agents:
+                accepted = await submit_strategy(
+                    world.id,
+                    agent,
+                    epoch_number=epoch_number,
+                    price_sat=200,
+                    restock_units=30,
+                )
+                assert accepted.accepted is True
+            resolved = await resolve_epoch(world.id, epoch_number)
+            assert resolved.status == "resolved"
+
+        assert all(item.status == "closed" for item in await list_businesses(world.id))
+        assert len(await list_season_results(world.id)) == 1
+
+        world = await advance_world_to_epoch(world, 3)
+        await ensure_epoch(world, 3)
+        new_agent = await create_paid_agent(
+            world,
+            display_name="s2-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        accepted = await submit_strategy(
+            world.id,
+            new_agent,
+            epoch_number=3,
+            price_sat=210,
+            restock_units=35,
+        )
+        assert accepted.accepted is True
+        resolved = await resolve_epoch(world.id, 3)
+        assert resolved.status == "resolved"
+
+        public_state = await build_public_world_state(world.id)
+        assert len(public_state.businesses) == 1
+        assert public_state.businesses[0].business_id == new_agent.business_id
+        assert len(public_state.leaderboard) == 1
+        assert public_state.leaderboard[0].business_id == new_agent.business_id
+
+        assert len(public_state.season_results) == 1
+        season_result = public_state.season_results[0]
+        assert season_result.season_number == 1
+        old_ids = {agent.business_id for agent in first_agents}
+        assert any(entry.business_id in old_ids for entry in season_result.leaderboard)
 
     asyncio.run(_run())

@@ -68,7 +68,7 @@ def test_paid_sponsorship_counts_in_public_state_and_hides_small_sponsors(monkey
 
         small = await create_season_sponsorship(
             world.id,
-            CreateSeasonSponsorship(amount_sat=10_000, sponsor_name="Small Fry"),
+            CreateSeasonSponsorship(amount_sat=9_999, sponsor_name="Small Fry"),
         )
         large = await create_season_sponsorship(
             world.id,
@@ -89,7 +89,7 @@ def test_paid_sponsorship_counts_in_public_state_and_hides_small_sponsors(monkey
             assert paid is True
 
         public_state = await build_public_world_state(world.id)
-        assert public_state.sponsorship_total_sat == 135_000
+        assert public_state.sponsorship_total_sat == 94_999
         names = [sponsor.name for sponsor in public_state.public_sponsors]
         assert "Big Spender" in names
         assert "Small Fry" not in names

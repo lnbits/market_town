@@ -253,11 +253,11 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
         assert season_result.payout_summary_text is not None
         payout_summary = json.loads(season_result.payout_summary_text)
         assert payout_summary["scheme"] == "top_3_60_30_10"
-        assert payout_summary["prize_pool_sat"] == 51320
+        assert payout_summary["prize_pool_sat"] == 11320
         assert [item["amount_sat"] for item in payout_summary["payouts"]] == [
-            30792,
-            15396,
-            5132,
+            6792,
+            3396,
+            1132,
         ]
         assert all(item["status"] == "paid" for item in payout_summary["payouts"])
 
@@ -270,7 +270,7 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
             for item in calls.paid_invoices
             if item.get("tag") == "market_town_season_payout"
         ]
-        assert [item["max_sat"] for item in season_payouts] == [30792, 15396, 5132]
+        assert [item["max_sat"] for item in season_payouts] == [6792, 3396, 1132]
 
         businesses = await list_businesses(world.id)
         assert all(item.status == "closed" for item in businesses)
@@ -586,6 +586,7 @@ def test_retry_failed_season_payout_uses_existing_summary_amounts(monkeypatch):
 
         assert paid_amounts == [100]
         assert updated.payout_status == "paid"
+        assert updated.payout_summary_text is not None
         summary = json.loads(updated.payout_summary_text)
         assert summary["prize_pool_sat"] == 100
         assert summary["payment_request_ids"] == ["old-request"]

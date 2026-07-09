@@ -117,6 +117,7 @@ from .models import (
     PaymentStatusResponse,
     PublicBusinessType,
     PublicDistrict,
+    PublicSeasonResult,
     PublicSponsor,
     PublicWorld,
     PublicWorldState,
@@ -982,6 +983,8 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
                 cash_delta_sat / abs(latest_snapshot.cash_before)
             ) * 100
         active_epoch_count = len(season_snapshots)
+        if business.status == "closed" and active_epoch_count == 0:
+            continue
         average_profit_sat = (
             sum(snapshot.profit_sat for snapshot in season_snapshots)
             / active_epoch_count
@@ -1065,6 +1068,36 @@ def build_leaderboard(items: list[BusinessBoardItem]) -> list[LeaderboardEntry]:
     return leaderboard
 
 
+def _season_result_leaderboard(season_result: SeasonResult) -> list[LeaderboardEntry]:
+    return [
+        LeaderboardEntry.parse_obj(item)
+        for item in json.loads(season_result.leaderboard_text)
+    ]
+
+
+def _public_season_results(
+    season_results: list[SeasonResult],
+) -> list[PublicSeasonResult]:
+    return [
+        PublicSeasonResult(
+            season_number=item.season_number,
+            epoch_start=item.epoch_start,
+            epoch_end=item.epoch_end,
+            leaderboard=_season_result_leaderboard(item),
+            payout_status=item.payout_status,
+        )
+        for item in season_results
+    ]
+
+
+def _all_time_leaderboard(
+    season_results: list[PublicSeasonResult],
+) -> list[LeaderboardEntry]:
+    entries = [entry for result in season_results for entry in result.leaderboard]
+    entries.sort(key=lambda item: (-item.score, -item.cash_sat, item.business_name))
+    return entries[:10]
+
+
 async def _build_delayed_reasoning(
     world: World, board: list[BusinessBoardItem]
 ) -> list[DelayedReasoningEntry]:
@@ -1140,6 +1173,7 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
     delayed_reasoning = await _build_delayed_reasoning(world, board)
     sponsorship_season = sponsorship_season_number(world, has_active_businesses)
     sponsorships = await list_paid_season_sponsorships(world.id, sponsorship_season)
+    season_results = _public_season_results(await list_season_results(world.id))
     return PublicWorldState(
         world=PublicWorld(
             id=world.id,
@@ -1168,6 +1202,8 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
         ],
         businesses=board,
         leaderboard=build_leaderboard(board),
+        all_time_leaderboard=_all_time_leaderboard(season_results),
+        season_results=season_results,
         recent_digests=recent_digests,
         delayed_reasoning=delayed_reasoning,
         sponsorship_total_sat=sum(item.amount_sat for item in sponsorships),
