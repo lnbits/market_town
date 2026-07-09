@@ -29,6 +29,7 @@ def init_ext():
             for table in (
                 "audit_events",
                 "payment_requests",
+                "season_sponsorships",
                 "season_results",
                 "business_epoch_snapshots",
                 "submissions",

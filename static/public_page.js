@@ -11,7 +11,9 @@ window.PageMarketTownPublic = {
         businesses: [],
         leaderboard: [],
         recent_digests: [],
-        delayed_reasoning: []
+        delayed_reasoning: [],
+        sponsorship_total_sat: 0,
+        public_sponsors: []
       },
       worldSocket: null,
       worldSocketConnecting: false,
@@ -27,6 +29,15 @@ window.PageMarketTownPublic = {
         show: false
       },
       claimSubmitting: false,
+      sponsorship: {
+        submitting: false,
+        dialog: false,
+        invoice: null,
+        data: {
+          amount_sat: 50000,
+          sponsor_name: ''
+        }
+      },
       agentDialog: {
         show: false
       },
@@ -385,6 +396,28 @@ window.PageMarketTownPublic = {
       } finally {
         this.claimSubmitting = false
       }
+    },
+    async submitSponsorship() {
+      if (this.sponsorship.submitting) return
+      this.sponsorship.submitting = true
+      try {
+        const {data} = await LNbits.api.request(
+          'POST',
+          `/market_town/api/v1/public/world/${this.worldId}/sponsorships`,
+          null,
+          this.sponsorship.data
+        )
+        this.sponsorship.invoice = data
+        this.sponsorship.dialog = true
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      } finally {
+        this.sponsorship.submitting = false
+      }
+    },
+    copySponsorshipInvoice() {
+      if (!this.sponsorship.invoice?.payment_request) return
+      LNbits.utils.copyText(this.sponsorship.invoice.payment_request)
     },
     copyInvoice() {
       if (!this.claimState.payment_request) return

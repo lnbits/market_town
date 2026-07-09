@@ -241,3 +241,24 @@ async def m001_initial(db):
 
 async def m002_add_payment_request_reservation_expiry(db):
     await db.execute("ALTER TABLE market_town.payment_requests ADD COLUMN reservation_expires_at TIMESTAMP;")
+
+
+async def m003_add_season_sponsorships(db):
+    await db.execute(
+        f"""
+        CREATE TABLE market_town.season_sponsorships (
+            id TEXT PRIMARY KEY,
+            world_id TEXT NOT NULL,
+            season_number INTEGER NOT NULL,
+            payment_hash TEXT NOT NULL,
+            payment_request TEXT,
+            amount_sat INTEGER NOT NULL,
+            sponsor_name TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            paid_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
+            UNIQUE (payment_hash)
+        );
+        """
+    )

@@ -4,7 +4,7 @@ from lnbits.core.models import Payment
 from lnbits.tasks import register_invoice_listener
 from loguru import logger
 
-from .services import maybe_resolve_due_epochs, payment_received_for_claim
+from .services import maybe_resolve_due_epochs, payment_received_for_claim, payment_received_for_sponsorship
 
 
 async def wait_for_paid_invoices():
@@ -16,14 +16,18 @@ async def wait_for_paid_invoices():
 
 
 async def on_invoice_paid(payment: Payment) -> None:
-    if payment.extra.get("tag") != "market_town":
+    tag = payment.extra.get("tag")
+    if tag not in {"market_town", "market_town_sponsorship"}:
         return
 
-    logger.info(f"Invoice paid for market_town: {payment.payment_hash}")
+    logger.info(f"Invoice paid for {tag}: {payment.payment_hash}")
     try:
-        await payment_received_for_claim(payment)
+        if tag == "market_town_sponsorship":
+            await payment_received_for_sponsorship(payment)
+        else:
+            await payment_received_for_claim(payment)
     except Exception as exc:
-        logger.error(f"Error processing Market Town claim payment: {exc}")
+        logger.error(f"Error processing Market Town payment: {exc}")
 
 
 async def run_scheduler_loop():

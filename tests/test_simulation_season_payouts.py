@@ -9,13 +9,15 @@ from market_town.crud import (  # type: ignore[import]
     list_businesses,
     list_season_results,
 )
-from market_town.models import Agent, ClaimBusinessRequest, LeaderboardEntry, SeasonResult, World
+from market_town.models import Agent, ClaimBusinessRequest, CreateSeasonSponsorship, LeaderboardEntry, SeasonResult, World
 from market_town.services import (  # type: ignore[import]
     _settle_single_season_payout,
     build_public_world_state,
     create_business_claim,
+    create_season_sponsorship,
     get_agent_session,
     payment_received_for_claim,
+    payment_received_for_sponsorship,
     resolve_epoch,
     retry_season_payouts,
     reveal_claim_credentials,
@@ -116,6 +118,13 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
             )
             agents.append(await reveal_claim_credentials(claim.claim_token))
 
+        sponsorship = await create_season_sponsorship(
+            world.id, CreateSeasonSponsorship(amount_sat=50_000, sponsor_name="ACME")
+        )
+        assert await payment_received_for_sponsorship(
+            SimpleNamespace(payment_hash=sponsorship.payment_hash, extra={"tag": "market_town_sponsorship"})
+        )
+
         first_epoch = 1
         for index, agent in enumerate(agents):
             await submit_strategy(
@@ -144,8 +153,8 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
         assert season_result.payout_summary_text is not None
         payout_summary = json.loads(season_result.payout_summary_text)
         assert payout_summary["scheme"] == "top_3_60_30_10"
-        assert payout_summary["prize_pool_sat"] == 1320
-        assert [item["amount_sat"] for item in payout_summary["payouts"]] == [792, 396, 132]
+        assert payout_summary["prize_pool_sat"] == 51320
+        assert [item["amount_sat"] for item in payout_summary["payouts"]] == [30792, 15396, 5132]
         assert all(item["status"] == "paid" for item in payout_summary["payouts"])
 
         leaderboard = json.loads(season_result.leaderboard_text)
@@ -153,7 +162,7 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
         assert all(item["business_id"] for item in leaderboard)
         assert all("cash_sat" in item for item in leaderboard)
         season_payouts = [item for item in calls.paid_invoices if item.get("tag") == "market_town_season_payout"]
-        assert [item["max_sat"] for item in season_payouts] == [792, 396, 132]
+        assert [item["max_sat"] for item in season_payouts] == [30792, 15396, 5132]
 
         businesses = await list_businesses(world.id)
         assert all(item.status == "closed" for item in businesses)

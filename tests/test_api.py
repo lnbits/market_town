@@ -8,7 +8,7 @@ from lnbits.core.models.users import AccountId
 
 from market_town import market_town_ext  # type: ignore[import]
 from market_town.crud import get_world_by_id  # type: ignore[import]
-from market_town.services import payment_received_for_claim  # type: ignore[import]
+from market_town.services import payment_received_for_claim, payment_received_for_sponsorship  # type: ignore[import]
 from market_town.views_api import check_account_id_exists  # type: ignore[import]
 
 
@@ -33,10 +33,13 @@ async def _client(monkeypatch, user_id: str, wallet_owner: str | None = None) ->
 
 
 def _patch_payment_services(monkeypatch, payment_hash: str = "hash-api-claim"):
+    counter = {"value": 0}
+
     async def fake_create_invoice(*args, **kwargs):
         if kwargs["wallet_id"].endswith("-fees"):
             return SimpleNamespace(payment_hash=f"{payment_hash}-fee", bolt11="lnbc1fee")
-        return SimpleNamespace(payment_hash=payment_hash, bolt11="lnbc1claim")
+        counter["value"] += 1
+        return SimpleNamespace(payment_hash=f"{payment_hash}-{counter['value']}", bolt11=f"lnbc1invoice{counter['value']}")
 
     async def fake_pay_invoice(**kwargs):
         return SimpleNamespace(ok=True)
@@ -126,6 +129,32 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             public_ws = await client.get(f"/market_town/api/v1/public/world/{world_id}/ws")
             assert public_ws.status_code == 200
             assert public_ws.json()["channel"] == f"market-town-public-{world_id}"
+
+            sponsorship = await client.post(
+                f"/market_town/api/v1/public/world/{world_id}/sponsorships",
+                json={"amount_sat": 50_000, "sponsor_name": "ACME"},
+            )
+            assert sponsorship.status_code == 201
+            sponsorship_payload = sponsorship.json()
+            assert sponsorship_payload["amount_sat"] == 50_000
+            assert sponsorship_payload["sponsor_name"] == "ACME"
+            assert "claim_token" not in sponsorship_payload
+
+            sponsorship_status = await client.get(
+                f"/market_town/api/v1/public/sponsorships/{sponsorship_payload['sponsorship_id']}"
+            )
+            assert sponsorship_status.status_code == 200
+            assert sponsorship_status.json()["status"] == "pending"
+
+            assert await payment_received_for_sponsorship(
+                SimpleNamespace(
+                    payment_hash=sponsorship_payload["payment_hash"],
+                    extra={"tag": "market_town_sponsorship"},
+                )
+            )
+            sponsored_world = await client.get(f"/market_town/api/v1/public/world/{world_id}")
+            assert sponsored_world.json()["sponsorship_total_sat"] == 50_000
+            assert sponsored_world.json()["public_sponsors"] == [{"name": "ACME", "amount_sat": 50_000}]
 
             claim = await client.post(
                 f"/market_town/api/v1/public/world/{world_id}/claim",

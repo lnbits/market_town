@@ -32,6 +32,7 @@ from .crud import (
     create_epoch,
     create_payment_request,
     create_season_result,
+    create_season_sponsorship as create_season_sponsorship_record,
     create_snapshot,
     create_submission,
     create_world,
@@ -57,6 +58,8 @@ from .crud import (
     get_payment_request_by_claim_token,
     get_payment_request_by_hash,
     get_season_result,
+    get_season_sponsorship,
+    get_season_sponsorship_by_hash,
     get_snapshot_for_business_epoch,
     get_world_by_id,
     get_world_for_user,
@@ -68,6 +71,7 @@ from .crud import (
     list_districts,
     list_epochs,
     list_paid_payment_requests_for_season,
+    list_paid_season_sponsorships,
     list_pending_payment_requests,
     list_season_results,
     list_snapshots_for_business,
@@ -82,6 +86,7 @@ from .crud import (
     update_epoch,
     update_payment_request,
     update_season_result,
+    update_season_sponsorship,
     update_world,
 )
 from .models import (
@@ -97,6 +102,7 @@ from .models import (
     BusinessType,
     CreateBusinessType,
     CreateDistrict,
+    CreateSeasonSponsorship,
     CreateWorld,
     DelayedReasoningEntry,
     District,
@@ -108,10 +114,13 @@ from .models import (
     PaymentStatusResponse,
     PublicBusinessType,
     PublicDistrict,
+    PublicSponsor,
     PublicWorld,
     PublicWorldState,
     SafeAgent,
     SeasonResult,
+    SeasonSponsorship,
+    SeasonSponsorshipResponse,
     SubmissionAccepted,
     SubmissionView,
     UpdateBusinessType,
@@ -231,6 +240,7 @@ EVENT_CATALOG = [
 ]
 
 SEASON_PAYOUT_WEIGHTS = [60, 30, 10]
+PUBLIC_SPONSOR_MIN_AMOUNT_SAT = 50_000
 CLAIM_RESERVATION_SECONDS = 600
 PENDING_CLAIM_GRACE_SECONDS = 30
 SETTLEMENT_RETRY_AFTER_SECONDS = 300
@@ -433,6 +443,8 @@ async def settle_season_payouts(
         include_before_start=season_result.season_number == 1,
     )
     prize_pool_sat = sum(item.prize_pool_amount_sat for item in paid_requests)
+    sponsorships = await list_paid_season_sponsorships(world.id, season_result.season_number)
+    prize_pool_sat += sum(item.amount_sat for item in sponsorships)
     payment_request_ids = [item.id for item in paid_requests]
     payout_amounts = calculate_season_payout_amounts(prize_pool_sat, leaderboard)
     if not payout_amounts:
@@ -980,6 +992,13 @@ async def _build_delayed_reasoning(world: World, board: list[BusinessBoardItem])
     ]
 
 
+def sponsorship_season_number(world: World, has_active_businesses: bool) -> int:
+    if has_active_businesses:
+        return world.current_season_number
+    # ponytail: idle worlds sponsor the next season; make a richer season state only if this grows.
+    return season_number_for_epoch(world, max(1, world.current_epoch_number + 1))
+
+
 async def build_public_world_state(world_id: str) -> PublicWorldState:
     world = await get_world_by_id(world_id)
     if not world:
@@ -1006,6 +1025,8 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
         for epoch in epochs
     ]
     delayed_reasoning = await _build_delayed_reasoning(world, board)
+    sponsorship_season = sponsorship_season_number(world, has_active_businesses)
+    sponsorships = await list_paid_season_sponsorships(world.id, sponsorship_season)
     return PublicWorldState(
         world=PublicWorld(
             id=world.id,
@@ -1032,7 +1053,84 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
         leaderboard=build_leaderboard(board),
         recent_digests=recent_digests,
         delayed_reasoning=delayed_reasoning,
+        sponsorship_total_sat=sum(item.amount_sat for item in sponsorships),
+        public_sponsors=[
+            PublicSponsor(name=item.sponsor_name, amount_sat=item.amount_sat)
+            for item in sponsorships
+            if item.sponsor_name and item.amount_sat >= PUBLIC_SPONSOR_MIN_AMOUNT_SAT
+        ],
     )
+
+
+async def create_season_sponsorship(
+    world_id: str, data: CreateSeasonSponsorship
+) -> SeasonSponsorshipResponse:
+    world = await get_world_by_id(world_id)
+    if not world:
+        raise ValueError("World not found.")
+    if world.status != "active":
+        raise ValueError("World is not active.")
+    season_number = sponsorship_season_number(world, await world_has_active_businesses(world.id))
+    sponsor_name = data.sponsor_name.strip() if data.sponsor_name else None
+    sponsorship_id = token_urlsafe(12)
+    payment = await create_invoice(
+        wallet_id=world.wallet_id,
+        amount=data.amount_sat,
+        memo=f"Market Town season {season_number} sponsorship",
+        expiry=settings.lightning_invoice_expiry,
+        extra={
+            "tag": "market_town_sponsorship",
+            "world_id": world.id,
+            "season_number": season_number,
+            "sponsorship_id": sponsorship_id,
+            "sponsor_name": sponsor_name,
+        },
+    )
+    sponsorship = SeasonSponsorship(
+        id=sponsorship_id,
+        world_id=world.id,
+        season_number=season_number,
+        payment_hash=payment.payment_hash,
+        payment_request=payment.bolt11,
+        amount_sat=data.amount_sat,
+        sponsor_name=sponsor_name,
+    )
+    sponsorship = await create_season_sponsorship_record(sponsorship)
+    await create_audit_event(world.id, "season_sponsorship_requested", sponsorship.id)
+    return _to_sponsorship_response(sponsorship)
+
+
+async def get_season_sponsorship_status(sponsorship_id: str) -> SeasonSponsorshipResponse:
+    sponsorship = await get_season_sponsorship(sponsorship_id)
+    if not sponsorship:
+        raise ValueError("Sponsorship not found.")
+    return _to_sponsorship_response(sponsorship)
+
+
+def _to_sponsorship_response(sponsorship: SeasonSponsorship) -> SeasonSponsorshipResponse:
+    return SeasonSponsorshipResponse(
+        sponsorship_id=sponsorship.id,
+        season_number=sponsorship.season_number,
+        payment_hash=sponsorship.payment_hash,
+        payment_request=sponsorship.payment_request or "",
+        amount_sat=sponsorship.amount_sat,
+        sponsor_name=sponsorship.sponsor_name,
+        status=sponsorship.status,
+        paid_at=sponsorship.paid_at,
+    )
+
+
+async def payment_received_for_sponsorship(payment: Any) -> bool:
+    sponsorship = await get_season_sponsorship_by_hash(payment.payment_hash)
+    if not sponsorship:
+        logger.warning(f"No Market Town sponsorship found for hash {payment.payment_hash}")
+        return False
+    if sponsorship.status == "paid":
+        return True
+    updated = await update_season_sponsorship(sponsorship.copy(update={"status": "paid", "paid_at": utc_now()}))
+    await create_audit_event(updated.world_id, "season_sponsorship_paid", updated.id)
+    await publish_public_event(updated.world_id, event="season_sponsorship_paid", payment_hash=updated.payment_hash)
+    return True
 
 
 async def create_business_claim(data) -> PaymentRequestResponse:

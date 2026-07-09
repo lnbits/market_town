@@ -21,11 +21,13 @@ from .models import (
     Epoch,
     PaymentRequestRecord,
     SeasonResult,
+    SeasonSponsorship,
     Submission,
     SubmissionView,
     World,
     utc_now,
 )
+
 
 db = Database("ext_market_town")
 
@@ -104,6 +106,7 @@ async def update_world(world: World) -> World:
 async def delete_world(world_id: str) -> None:
     for table in (
         "audit_events",
+        "season_sponsorships",
         "payment_requests",
         "season_results",
         "business_epoch_snapshots",
@@ -613,6 +616,45 @@ async def list_season_results(world_id: str) -> list[SeasonResult]:
         """,
         {"world_id": world_id},
         SeasonResult,
+    )
+
+
+async def create_season_sponsorship(sponsorship: SeasonSponsorship) -> SeasonSponsorship:
+    await db.insert("market_town.season_sponsorships", sponsorship)
+    return sponsorship
+
+
+async def get_season_sponsorship(sponsorship_id: str) -> SeasonSponsorship | None:
+    return await db.fetchone(
+        "SELECT * FROM market_town.season_sponsorships WHERE id = :id",
+        {"id": sponsorship_id},
+        SeasonSponsorship,
+    )
+
+
+async def get_season_sponsorship_by_hash(payment_hash: str) -> SeasonSponsorship | None:
+    return await db.fetchone(
+        "SELECT * FROM market_town.season_sponsorships WHERE payment_hash = :payment_hash",
+        {"payment_hash": payment_hash},
+        SeasonSponsorship,
+    )
+
+
+async def update_season_sponsorship(sponsorship: SeasonSponsorship) -> SeasonSponsorship:
+    updated = sponsorship.copy(update={"updated_at": utc_now()})
+    await db.update("market_town.season_sponsorships", updated)
+    return updated
+
+
+async def list_paid_season_sponsorships(world_id: str, season_number: int) -> list[SeasonSponsorship]:
+    return await db.fetchall(
+        """
+        SELECT * FROM market_town.season_sponsorships
+        WHERE world_id = :world_id AND season_number = :season_number AND status = 'paid'
+        ORDER BY amount_sat DESC, paid_at ASC
+        """,
+        {"world_id": world_id, "season_number": season_number},
+        SeasonSponsorship,
     )
 
 
