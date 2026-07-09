@@ -28,6 +28,7 @@ from .models import (
     Business,
     BusinessType,
     ClaimBusinessRequest,
+    CreateSeasonSponsorship,
     CreateWorld,
     District,
     Epoch,
@@ -36,6 +37,7 @@ from .models import (
     PublicWorldState,
     SafeAgent,
     SeasonResult,
+    SeasonSponsorshipResponse,
     SubmissionAccepted,
     UpdateBusinessType,
     UpdateDistrict,
@@ -47,9 +49,11 @@ from .services import (
     build_admin_dashboard,
     build_public_world_state,
     create_business_claim,
+    create_season_sponsorship,
     ensure_world_bootstrap,
     get_agent_session,
     get_claim_status,
+    get_season_sponsorship_status,
     override_business_status,
     reset_world_seeds,
     resolve_epoch,
@@ -324,6 +328,35 @@ async def api_create_claim(
         raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(HTTPStatus.BAD_REQUEST, "Could not create claim invoice.") from exc
+
+
+@market_town_api_router.post(
+    "/api/v1/public/world/{world_id}/sponsorships",
+    response_model=SeasonSponsorshipResponse,
+    status_code=HTTPStatus.CREATED,
+)
+async def api_create_season_sponsorship(
+    world_id: str,
+    data: CreateSeasonSponsorship,
+) -> SeasonSponsorshipResponse:
+    try:
+        return await create_season_sponsorship(world_id, data)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, "Could not create sponsorship invoice.") from exc
+
+
+@market_town_api_router.get(
+    "/api/v1/public/sponsorships/{sponsorship_id}",
+    response_model=SeasonSponsorshipResponse,
+    response_model_exclude_none=True,
+)
+async def api_get_season_sponsorship_status(sponsorship_id: str) -> SeasonSponsorshipResponse:
+    try:
+        return await get_season_sponsorship_status(sponsorship_id)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.NOT_FOUND, str(exc)) from exc
 
 
 @market_town_api_router.get(

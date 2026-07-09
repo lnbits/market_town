@@ -11,7 +11,9 @@ window.PageMarketTownPublic = {
         businesses: [],
         leaderboard: [],
         recent_digests: [],
-        delayed_reasoning: []
+        delayed_reasoning: [],
+        sponsorship_total_sat: 0,
+        public_sponsors: []
       },
       worldSocket: null,
       worldSocketConnecting: false,
@@ -27,6 +29,15 @@ window.PageMarketTownPublic = {
         show: false
       },
       claimSubmitting: false,
+      sponsorship: {
+        submitting: false,
+        dialog: false,
+        invoice: null,
+        data: {
+          amount_sat: 10000,
+          sponsor_name: ''
+        }
+      },
       agentDialog: {
         show: false
       },
@@ -379,30 +390,65 @@ window.PageMarketTownPublic = {
         this.claimDialog.show = false
         this.claimState = data
         this.paymentDialog.show = true
-        this.connectPaymentSocket(data.payment_hash)
+        this.connectPaymentSocket(data.payment_hash, async payload => {
+          this.claimState.status = payload.status
+          await this.fetchWorldState()
+          if (payload.status === 'paid' && this.claimState.claim_token) {
+            await this.revealCredentials(this.claimState.claim_token)
+            Quasar.Notify.create({
+              type: 'positive',
+              message: 'Payment received.'
+            })
+          } else if (payload.status === 'paid_unclaimed') {
+            Quasar.Notify.create({
+              type: 'warning',
+              message: 'Payment received, but the selected district is full.'
+            })
+          }
+        })
       } catch (error) {
         LNbits.utils.notifyApiError(error)
       } finally {
         this.claimSubmitting = false
       }
     },
-    copyInvoice() {
-      if (!this.claimState.payment_request) return
-      LNbits.utils.copyText(this.claimState.payment_request)
+    async submitSponsorship() {
+      if (this.sponsorship.submitting) return
+      this.sponsorship.submitting = true
+      try {
+        const {data} = await LNbits.api.request(
+          'POST',
+          `/market_town/api/v1/public/world/${this.worldId}/sponsorships`,
+          null,
+          this.sponsorship.data
+        )
+        this.sponsorship.invoice = data
+        this.sponsorship.dialog = true
+        this.connectPaymentSocket(data.payment_hash, () => {
+          Quasar.Notify.create({
+            type: 'positive',
+            message: 'Sponsorship payment received.'
+          })
+          this.sponsorship.dialog = false
+          this.sponsorship.invoice = null
+          this.sponsorship.data = {
+            amount_sat: 10000,
+            sponsor_name: ''
+          }
+          this.fetchWorldState()
+        })
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      } finally {
+        this.sponsorship.submitting = false
+      }
     },
-    copyAgentPrompt() {
-      LNbits.utils.copyText(this.agentPrompt)
-      Quasar.Notify.create({
-        type: 'positive',
-        message: 'Agent prompt copied.'
-      })
-    },
-    copyAgentSkillUrl() {
-      LNbits.utils.copyText(this.agentSkillUrl)
-      Quasar.Notify.create({
-        type: 'positive',
-        message: 'Agent skill URL copied.'
-      })
+    copyText(text, message) {
+      if (!text) return
+      LNbits.utils.copyText(text)
+      if (message) {
+        Quasar.Notify.create({type: 'positive', message})
+      }
     },
     async revealCredentials(claimToken) {
       try {
@@ -508,7 +554,7 @@ window.PageMarketTownPublic = {
         this.worldSocketConnecting = false
       }
     },
-    connectPaymentSocket(paymentHash) {
+    connectPaymentSocket(paymentHash, onPaid) {
       if (this.paymentSocket) {
         this.paymentSocket.onclose = null
         this.paymentSocket.close()
@@ -527,16 +573,7 @@ window.PageMarketTownPublic = {
           }
           if (!payload || typeof payload !== 'object') return
           if (payload.pending === false) {
-            this.claimState.status = payload.status
-            await this.fetchWorldState()
-            if (payload.status === 'paid' && this.claimState.claim_token) {
-              await this.revealCredentials(this.claimState.claim_token)
-            } else if (payload.status === 'paid_unclaimed') {
-              Quasar.Notify.create({
-                type: 'warning',
-                message: 'Payment received, but the selected district is full.'
-              })
-            }
+            await onPaid?.(payload)
             this.paymentSocket.close()
             this.paymentSocket = null
           }

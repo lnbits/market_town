@@ -2,7 +2,7 @@
   <div v-if="publicState.world" class="market-town-public q-pa-md">
     <div class="row justify-center">
       <div class="col-12 col-xl-10">
-        <q-card bordered class="q-mb-lg">
+        <q-card bordered class="q-mb-lg q-mt-md">
           <q-card-section class="row items-start q-col-gutter-md">
             <div class="col-12">
               <div class="text-overline text-primary">Market Town</div>
@@ -61,7 +61,7 @@
                   v-for="metric in heroMetrics"
                   :key="metric.label"
                 >
-                  <q-card bordered class="full-height">
+                  <q-card flat bordered class="full-height shadow-0">
                     <q-card-section>
                       <div
                         class="text-overline text-grey-7"
@@ -76,6 +76,81 @@
                   </q-card>
                 </div>
               </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <q-card bordered class="q-mb-lg">
+          <q-card-section class="row q-col-gutter-md items-start">
+            <div class="col-12 col-md-5">
+              <div class="text-overline text-primary">Sponsored season</div>
+              <div class="text-h6">Boost the prize pool</div>
+              <div class="text-body2 text-grey-7 q-mt-xs">
+                Sponsors add directly to the prize pool.
+              </div>
+              <div
+                class="text-h5 q-mt-md"
+                v-text="satLabel(publicState.sponsorship_total_sat)"
+              ></div>
+              <div class="text-caption text-grey-7">sponsored this season</div>
+            </div>
+            <div
+              class="col-12 col-md-3 q-pb-md"
+              v-if="publicState.public_sponsors.length"
+            >
+              <div class="text-caption text-primary q-mb-xs">
+                Biggest sponsors
+              </div>
+              <div style="max-height: 10rem; overflow-y: auto">
+                <q-list dense bordered separator>
+                  <q-item
+                    v-for="sponsor in publicState.public_sponsors"
+                    :key="sponsor.name + sponsor.amount_sat"
+                  >
+                    <q-item-section>
+                      <q-item-label v-text="sponsor.name"></q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-item-label
+                        v-text="satLabel(sponsor.amount_sat)"
+                      ></q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </div>
+            </div>
+            <div class="col-12 col-md-3 offset-md-1">
+              <div class="text-caption text-primary q-mb-xs">
+                Sponsor this season
+              </div>
+              <q-form class="q-gutter-sm" @submit.prevent="submitSponsorship">
+                <q-input
+                  filled
+                  dense
+                  type="number"
+                  min="100"
+                  v-model.number="sponsorship.data.amount_sat"
+                  label="Amount sats"
+                  hint="10k sats or higher, your name shows in the sponsor list"
+                ></q-input>
+                <q-input
+                  filled
+                  dense
+                  v-model.trim="sponsorship.data.sponsor_name"
+                  label="Sponsor name (shown from 10k sats)"
+                  hint="Optional, leave blank for anonymous"
+                ></q-input>
+                <q-btn
+                  color="primary"
+                  unelevated
+                  type="submit"
+                  label="Sponsor season"
+                  :loading="sponsorship.submitting"
+                  :disable="
+                    sponsorship.submitting || !sponsorship.data.amount_sat
+                  "
+                ></q-btn>
+              </q-form>
             </div>
           </q-card-section>
         </q-card>
@@ -671,7 +746,7 @@
                   unelevated
                   icon="content_copy"
                   label="Copy prompt"
-                  @click="copyAgentPrompt"
+                  @click="copyText(agentPrompt, 'Agent prompt copied.')"
                 ></q-btn>
                 <q-btn
                   outline
@@ -687,7 +762,7 @@
                   color="grey-8"
                   icon="link"
                   label="Copy URL"
-                  @click="copyAgentSkillUrl"
+                  @click="copyText(agentSkillUrl, 'Agent skill URL copied.')"
                 ></q-btn>
               </q-card-actions>
             </q-card>
@@ -921,7 +996,44 @@
           ></lnbits-qrcode>
         </div>
         <div class="row q-mt-lg">
-          <q-btn outline color="grey" @click="copyInvoice">Copy invoice</q-btn>
+          <q-btn
+            outline
+            color="grey"
+            @click="copyText(claimState.payment_request)"
+            >Copy invoice</q-btn
+          >
+          <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
+        </div>
+      </q-card>
+    </q-dialog>
+    <q-dialog v-model="sponsorship.dialog" position="top">
+      <q-card
+        v-if="sponsorship.invoice?.payment_request"
+        class="q-pa-lg q-pt-xl lnbits__dialog-card"
+      >
+        <div class="text-center q-mb-lg">
+          <div class="text-subtitle1">Season Sponsorship</div>
+          <div class="text-body2 text-grey-7 q-mt-xs">
+            Season {{ sponsorship.invoice.season_number }}
+          </div>
+          <div
+            class="text-h6 q-mt-sm"
+            v-text="satLabel(sponsorship.invoice.amount_sat)"
+          ></div>
+        </div>
+        <div class="text-center q-mb-lg">
+          <lnbits-qrcode
+            :href="'lightning:' + sponsorship.invoice.payment_request"
+            :value="'lightning:' + sponsorship.invoice.payment_request"
+          ></lnbits-qrcode>
+        </div>
+        <div class="row q-mt-lg">
+          <q-btn
+            outline
+            color="grey"
+            @click="copyText(sponsorship.invoice?.payment_request)"
+            >Copy invoice</q-btn
+          >
           <q-btn v-close-popup flat color="grey" class="q-ml-auto">Close</q-btn>
         </div>
       </q-card>

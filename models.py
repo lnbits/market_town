@@ -493,6 +493,44 @@ class PaymentStatusResponse(BaseModel):
     paid_at: datetime | None = None
 
 
+class CreateSeasonSponsorship(BaseModel):
+    amount_sat: int = Field(ge=1, le=10_000_000)
+    sponsor_name: str | None = Field(default=None, max_length=80)
+
+    class Config:
+        extra = "forbid"
+
+
+class SeasonSponsorship(BaseModel):
+    id: str
+    world_id: str
+    season_number: int
+    payment_hash: str
+    payment_request: str | None = None
+    amount_sat: int
+    sponsor_name: str | None = None
+    status: str = "pending"
+    paid_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class SeasonSponsorshipResponse(BaseModel):
+    sponsorship_id: str
+    season_number: int
+    payment_hash: str
+    payment_request: str
+    amount_sat: int
+    sponsor_name: str | None = None
+    status: str = "pending"
+    paid_at: datetime | None = None
+
+
+class PublicSponsor(BaseModel):
+    name: str
+    amount_sat: int
+
+
 class AgentCredentialReveal(BaseModel):
     agent_id: str
     business_id: str
@@ -521,6 +559,8 @@ class PublicWorldState(BaseModel):
     leaderboard: list[LeaderboardEntry] = Field(default_factory=list)
     recent_digests: list[EpochDigest] = Field(default_factory=list)
     delayed_reasoning: list[DelayedReasoningEntry] = Field(default_factory=list)
+    sponsorship_total_sat: int = 0
+    public_sponsors: list[PublicSponsor] = Field(default_factory=list)
 
 
 class AgentSession(BaseModel):
