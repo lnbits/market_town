@@ -8,9 +8,6 @@ from secrets import token_urlsafe
 from typing import Any
 from urllib.parse import quote
 
-from lnbits.core.services import create_invoice, pay_invoice, update_pending_payment
-from lnbits.helpers import check_callback_url
-from lnbits.settings import settings
 from lnurl import (
     LnurlErrorResponse,
     LnurlPayResponse,
@@ -19,6 +16,10 @@ from lnurl import (
     handle,
 )
 from loguru import logger
+
+from lnbits.core.services import create_invoice, pay_invoice, update_pending_payment
+from lnbits.helpers import check_callback_url
+from lnbits.settings import settings
 
 from .crud import (
     claim_epoch_for_resolution,
@@ -32,7 +33,6 @@ from .crud import (
     create_epoch,
     create_payment_request,
     create_season_result,
-    create_season_sponsorship as create_season_sponsorship_record,
     create_snapshot,
     create_submission,
     create_world,
@@ -88,6 +88,9 @@ from .crud import (
     update_season_result,
     update_season_sponsorship,
     update_world,
+)
+from .crud import (
+    create_season_sponsorship as create_season_sponsorship_record,
 )
 from .models import (
     ActionPayload,
@@ -240,7 +243,7 @@ EVENT_CATALOG = [
 ]
 
 SEASON_PAYOUT_WEIGHTS = [60, 30, 10]
-PUBLIC_SPONSOR_MIN_AMOUNT_SAT = 50_000
+PUBLIC_SPONSOR_MIN_AMOUNT_SAT = 10_000
 CLAIM_RESERVATION_SECONDS = 600
 PENDING_CLAIM_GRACE_SECONDS = 30
 SETTLEMENT_RETRY_AFTER_SECONDS = 300
@@ -263,15 +266,23 @@ def current_utc_epoch_number(world: World, now: datetime | None = None) -> int:
     return (elapsed_seconds // epoch_seconds(world)) + 1
 
 
-def epoch_window(world: World, epoch_number: int) -> tuple[datetime, datetime, datetime]:
+def epoch_window(
+    world: World, epoch_number: int
+) -> tuple[datetime, datetime, datetime]:
     epoch_offset = max(0, epoch_number - 1)
-    started_at = world.started_at + timedelta(seconds=epoch_offset * epoch_seconds(world))
+    started_at = world.started_at + timedelta(
+        seconds=epoch_offset * epoch_seconds(world)
+    )
     digest_at = started_at + timedelta(seconds=epoch_seconds(world))
-    submission_deadline_at = digest_at - timedelta(minutes=world.submission_cutoff_minutes)
+    submission_deadline_at = digest_at - timedelta(
+        minutes=world.submission_cutoff_minutes
+    )
     return started_at, submission_deadline_at, digest_at
 
 
-def world_started_at_for_epoch(world: World, epoch_number: int, now: datetime) -> datetime:
+def world_started_at_for_epoch(
+    world: World, epoch_number: int, now: datetime
+) -> datetime:
     epoch_offset = max(0, epoch_number - 1)
     return now - timedelta(seconds=epoch_offset * epoch_seconds(world))
 
@@ -290,7 +301,9 @@ async def world_has_active_businesses(world_id: str) -> bool:
 def fee_breakdown(amount_sat: int, operator_fee_percent: float) -> tuple[int, int]:
     base_amount = max(0, amount_sat)
     operations = floor(base_amount * max(0.0, operator_fee_percent) / 100.0)
-    return operations, max(0, base_amount - operations - calculate_tribute_amount(base_amount))
+    return operations, max(
+        0, base_amount - operations - calculate_tribute_amount(base_amount)
+    )
 
 
 def calculate_tribute_amount(amount_sat: int) -> int:
@@ -298,7 +311,9 @@ def calculate_tribute_amount(amount_sat: int) -> int:
 
 
 def pending_claim_cutoff(now: datetime | None = None) -> datetime:
-    return (now or utc_now()) - timedelta(seconds=CLAIM_RESERVATION_SECONDS + PENDING_CLAIM_GRACE_SECONDS)
+    return (now or utc_now()) - timedelta(
+        seconds=CLAIM_RESERVATION_SECONDS + PENDING_CLAIM_GRACE_SECONDS
+    )
 
 
 def claim_reservation_expires_at(now: datetime | None = None) -> datetime:
@@ -316,20 +331,32 @@ def to_safe_agent(agent: Agent) -> SafeAgent:
 async def to_public_district(
     district: District, active_pending_payment_requests: list[PaymentRequestRecord]
 ) -> PublicDistrict:
-    occupied_slots = await get_active_business_count_for_district(district.world_id, district.id)
-    pending_slots = len([item for item in active_pending_payment_requests if item.district_id == district.id])
+    occupied_slots = await get_active_business_count_for_district(
+        district.world_id, district.id
+    )
+    pending_slots = len(
+        [
+            item
+            for item in active_pending_payment_requests
+            if item.district_id == district.id
+        ]
+    )
     return PublicDistrict.parse_obj(
         {
             **district.dict(exclude={"config_text", "created_at", "updated_at"}),
             "occupied_slots": occupied_slots,
             "pending_slots": pending_slots,
-            "available_slots": max(0, district.slot_limit - occupied_slots - pending_slots),
+            "available_slots": max(
+                0, district.slot_limit - occupied_slots - pending_slots
+            ),
         }
     )
 
 
 def to_public_business_type(business_type: BusinessType) -> PublicBusinessType:
-    return PublicBusinessType.parse_obj(business_type.dict(exclude={"config_text", "created_at", "updated_at"}))
+    return PublicBusinessType.parse_obj(
+        business_type.dict(exclude={"config_text", "created_at", "updated_at"})
+    )
 
 
 def validate_lnaddress(value: str) -> None:
@@ -348,14 +375,18 @@ def lnaddress_url(value: str) -> str:
     return url
 
 
-async def get_pr_from_lnurl(lnurl: str, amount_msat: int, comment: str | None = None) -> str:
+async def get_pr_from_lnurl(
+    lnurl: str, amount_msat: int, comment: str | None = None
+) -> str:
     if "@" in lnurl:
         lnurl = lnaddress_url(lnurl)
     res = await handle(lnurl, user_agent=settings.user_agent, timeout=10)
     if isinstance(res, LnurlErrorResponse):
         raise LnurlResponseException(res.reason)
     if not isinstance(res, LnurlPayResponse):
-        raise LnurlResponseException("Invalid LNURL response. Expected LnurlPayResponse.")
+        raise LnurlResponseException(
+            "Invalid LNURL response. Expected LnurlPayResponse."
+        )
     try:
         check_callback_url(res.callback)
     except ValueError as exc:
@@ -372,10 +403,16 @@ async def get_pr_from_lnurl(lnurl: str, amount_msat: int, comment: str | None = 
     return res2.pr
 
 
-def calculate_season_payout_amounts(prize_pool_sat: int, leaderboard: list[LeaderboardEntry]) -> dict[str, int]:
+def calculate_season_payout_amounts(
+    prize_pool_sat: int, leaderboard: list[LeaderboardEntry]
+) -> dict[str, int]:
     if prize_pool_sat <= 0 or not leaderboard:
         return {}
-    winners = [entry for entry in leaderboard[: len(SEASON_PAYOUT_WEIGHTS)] if entry.business_id]
+    winners = [
+        entry
+        for entry in leaderboard[: len(SEASON_PAYOUT_WEIGHTS)]
+        if entry.business_id
+    ]
     if not winners:
         return {}
     payouts: dict[str, int] = {}
@@ -406,6 +443,8 @@ async def pay_tribute(tribute: int, wallet_id: str) -> None:
         payment_request=pr,
         max_sat=tribute,
         description="Tribute to help support LNbits",
+        tag="market_town_tribute",
+        extra={"tag": "market_town_tribute"},
     )
 
 
@@ -443,14 +482,18 @@ async def settle_season_payouts(
         include_before_start=season_result.season_number == 1,
     )
     prize_pool_sat = sum(item.prize_pool_amount_sat for item in paid_requests)
-    sponsorships = await list_paid_season_sponsorships(world.id, season_result.season_number)
+    sponsorships = await list_paid_season_sponsorships(
+        world.id, season_result.season_number
+    )
     prize_pool_sat += sum(item.amount_sat for item in sponsorships)
     payment_request_ids = [item.id for item in paid_requests]
     payout_amounts = calculate_season_payout_amounts(prize_pool_sat, leaderboard)
     if not payout_amounts:
         existing_summary = _season_payout_summary(season_result)
         prize_pool_sat = existing_summary.get("prize_pool_sat", prize_pool_sat)
-        payment_request_ids = existing_summary.get("payment_request_ids", payment_request_ids)
+        payment_request_ids = existing_summary.get(
+            "payment_request_ids", payment_request_ids
+        )
         payout_amounts = _season_payout_amounts_by_business_id(season_result)
     businesses = {business.id: business for business in await list_businesses(world.id)}
     agents = {agent.id: agent for agent in await list_agents(world.id)}
@@ -473,7 +516,6 @@ async def settle_season_payouts(
                 agent,
             )
         )
-
     paid_count = len([item for item in payouts if item["status"] == "paid"])
     if not payouts:
         payout_status = "none"
@@ -513,7 +555,9 @@ def _season_payouts_by_business_id(season_result: SeasonResult) -> dict[str, dic
     if season_result.payout_status != "partial":
         return {}
     if not season_result.payout_summary_text:
-        raise ValueError("Partial season payouts need an existing summary to retry safely.")
+        raise ValueError(
+            "Partial season payouts need an existing summary to retry safely."
+        )
     existing_summary = _season_payout_summary(season_result)
     payouts: dict[str, dict] = {}
     for item in existing_summary.get("payouts", []):
@@ -523,8 +567,13 @@ def _season_payouts_by_business_id(season_result: SeasonResult) -> dict[str, dic
     return payouts
 
 
-def _season_payout_amounts_by_business_id(season_result: SeasonResult) -> dict[str, int]:
-    if season_result.payout_status not in {"failed", "partial"} or not season_result.payout_summary_text:
+def _season_payout_amounts_by_business_id(
+    season_result: SeasonResult,
+) -> dict[str, int]:
+    if (
+        season_result.payout_status not in {"failed", "partial"}
+        or not season_result.payout_summary_text
+    ):
         return {}
     existing_summary = _season_payout_summary(season_result)
     return {
@@ -593,13 +642,19 @@ async def retry_season_payouts(world: World, season_number: int) -> SeasonResult
         raise ValueError("Season result not found.")
     if season_result.payout_status == "paid":
         return season_result
-    leaderboard = [LeaderboardEntry.parse_obj(item) for item in json.loads(season_result.leaderboard_text)]
+    leaderboard = [
+        LeaderboardEntry.parse_obj(item)
+        for item in json.loads(season_result.leaderboard_text)
+    ]
     updated = await settle_season_payouts(world, season_result, leaderboard)
     await create_audit_event(
         world.id,
         "season_payout_retry",
         updated.id,
-        payload={"season_number": season_number, "payout_status": updated.payout_status},
+        payload={
+            "season_number": season_number,
+            "payout_status": updated.payout_status,
+        },
     )
     return updated
 
@@ -616,7 +671,9 @@ async def seed_defaults(world_id: str, replace: bool = False) -> None:
         await create_district(world_id, district)
 
     for business_type in DEFAULT_BUSINESS_TYPES:
-        existing_business_type = await get_business_type_by_key(world_id, business_type.type_key)
+        existing_business_type = await get_business_type_by_key(
+            world_id, business_type.type_key
+        )
         if existing_business_type:
             continue
         await create_business_type(world_id, business_type)
@@ -644,13 +701,17 @@ async def ensure_world_bootstrap(user_id: str, data: CreateWorld) -> World:
 async def update_world_settings(world: World, data: UpdateWorld) -> World:
     updated = await update_world(world.copy(update=data.dict(exclude_unset=True)))
     await ensure_current_epoch(updated)
-    await create_audit_event(updated.id, "world_updated", updated.id, payload=data.dict(exclude_unset=True))
+    await create_audit_event(
+        updated.id, "world_updated", updated.id, payload=data.dict(exclude_unset=True)
+    )
     return updated
 
 
 async def ensure_current_epoch(world: World) -> Epoch | None:
     if not await world_has_active_businesses(world.id):
-        season_number = season_number_for_epoch(world, max(1, world.current_epoch_number))
+        season_number = season_number_for_epoch(
+            world, max(1, world.current_epoch_number)
+        )
         if world.current_season_number != season_number or world.active_event_id:
             await update_world(
                 world.copy(
@@ -669,12 +730,16 @@ async def ensure_current_epoch(world: World) -> Epoch | None:
     season_number = season_number_for_epoch(world, current_epoch_number)
     created_missing_epochs = 0
     highest_contiguous_epoch: Epoch | None = None
-    for missing_epoch_number in range(max(1, world.last_resolved_epoch + 1), current_epoch_number):
+    for missing_epoch_number in range(
+        max(1, world.last_resolved_epoch + 1), current_epoch_number
+    ):
         if created_missing_epochs >= MAX_EPOCH_BACKFILL_PER_CALL:
             break
         epoch = await get_epoch(world.id, missing_epoch_number)
         if not epoch:
-            started_at, submission_deadline_at, digest_at = epoch_window(world, missing_epoch_number)
+            started_at, submission_deadline_at, digest_at = epoch_window(
+                world, missing_epoch_number
+            )
             epoch = await create_epoch(
                 Epoch(
                     id=token_urlsafe(12),
@@ -696,7 +761,10 @@ async def ensure_current_epoch(world: World) -> Epoch | None:
     ):
         target_epoch_number = highest_contiguous_epoch.epoch_number
         target_season_number = season_number_for_epoch(world, target_epoch_number)
-        if world.current_epoch_number != target_epoch_number or world.current_season_number != target_season_number:
+        if (
+            world.current_epoch_number != target_epoch_number
+            or world.current_season_number != target_season_number
+        ):
             await update_world(
                 world.copy(
                     update={
@@ -708,7 +776,10 @@ async def ensure_current_epoch(world: World) -> Epoch | None:
         return highest_contiguous_epoch
     epoch = await get_epoch(world.id, current_epoch_number)
     if epoch:
-        if world.current_epoch_number != current_epoch_number or world.current_season_number != season_number:
+        if (
+            world.current_epoch_number != current_epoch_number
+            or world.current_season_number != season_number
+        ):
             await update_world(
                 world.copy(
                     update={
@@ -719,7 +790,9 @@ async def ensure_current_epoch(world: World) -> Epoch | None:
             )
         return epoch
 
-    started_at, submission_deadline_at, digest_at = epoch_window(world, current_epoch_number)
+    started_at, submission_deadline_at, digest_at = epoch_window(
+        world, current_epoch_number
+    )
     epoch = Epoch(
         id=token_urlsafe(12),
         world_id=world.id,
@@ -743,7 +816,9 @@ async def ensure_current_epoch(world: World) -> Epoch | None:
 
 
 async def retire_season_businesses(world: World, season_result: SeasonResult) -> None:
-    businesses = [item for item in await list_businesses(world.id) if item.status != "closed"]
+    businesses = [
+        item for item in await list_businesses(world.id) if item.status != "closed"
+    ]
     agent_ids = {item.agent_id for item in businesses}
     now = utc_now()
     for business in businesses:
@@ -806,7 +881,9 @@ async def build_admin_dashboard(user_id: str) -> AdminDashboard | None:
     world = await get_world_for_user(user_id)
     if not world:
         return None
-    active_pending_payment_requests = await list_active_pending_payment_requests(world.id, pending_claim_cutoff())
+    active_pending_payment_requests = await list_active_pending_payment_requests(
+        world.id, pending_claim_cutoff()
+    )
     raw_businesses = await list_businesses(world.id)
     has_active_businesses = any(item.status != "closed" for item in raw_businesses)
     current_epoch = (
@@ -815,7 +892,8 @@ async def build_admin_dashboard(user_id: str) -> AdminDashboard | None:
         else None
     )
     districts = [
-        await to_public_district(item, active_pending_payment_requests) for item in await list_districts(world.id)
+        await to_public_district(item, active_pending_payment_requests)
+        for item in await list_districts(world.id)
     ]
     business_types = await list_business_types(world.id)
     agents = await list_agents(world.id)
@@ -868,7 +946,12 @@ def _leaderboard_score(
     reliability: float,
     quality_level: float,
 ) -> float:
-    return average_profit_sat + (reputation * 50) + (reliability * 30) + (quality_level * 20)
+    return (
+        average_profit_sat
+        + (reputation * 50)
+        + (reliability * 30)
+        + (quality_level * 20)
+    )
 
 
 async def build_business_board(world: World) -> list[BusinessBoardItem]:
@@ -879,16 +962,29 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
     for business in await list_businesses(world.id):
         district = districts.get(business.district_id)
         business_type = business_types.get(business.business_type_id)
-        snapshots = await list_snapshots_for_business(business.id, limit=max(1, world.season_length_epochs))
-        season_snapshots = [snapshot for snapshot in snapshots if snapshot.epoch_number >= season_epoch_start]
+        snapshots = await list_snapshots_for_business(
+            business.id, limit=max(1, world.season_length_epochs)
+        )
+        season_snapshots = [
+            snapshot
+            for snapshot in snapshots
+            if snapshot.epoch_number >= season_epoch_start
+        ]
         latest_snapshot = season_snapshots[0] if season_snapshots else None
-        cash_delta_sat = latest_snapshot.cash_after - latest_snapshot.cash_before if latest_snapshot else 0
+        cash_delta_sat = (
+            latest_snapshot.cash_after - latest_snapshot.cash_before
+            if latest_snapshot
+            else 0
+        )
         cash_delta_percent = None
         if latest_snapshot and latest_snapshot.cash_before != 0:
-            cash_delta_percent = (cash_delta_sat / abs(latest_snapshot.cash_before)) * 100
+            cash_delta_percent = (
+                cash_delta_sat / abs(latest_snapshot.cash_before)
+            ) * 100
         active_epoch_count = len(season_snapshots)
         average_profit_sat = (
-            sum(snapshot.profit_sat for snapshot in season_snapshots) / active_epoch_count
+            sum(snapshot.profit_sat for snapshot in season_snapshots)
+            / active_epoch_count
             if active_epoch_count
             else 0
         )
@@ -905,7 +1001,9 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
                 display_name=business.display_name,
                 district_id=business.district_id,
                 district_name=district.name if district else business.district_id,
-                business_type_name=business_type.name if business_type else business.business_type_id,
+                business_type_name=business_type.name
+                if business_type
+                else business.business_type_id,
                 status=business.status,
                 score=score,
                 average_profit_sat=average_profit_sat,
@@ -917,14 +1015,25 @@ async def build_business_board(world: World) -> list[BusinessBoardItem]:
                 price_sat=business.price_sat,
                 stock_units=business.stock_units,
                 latest_profit_sat=latest_snapshot.profit_sat if latest_snapshot else 0,
-                latest_revenue_sat=latest_snapshot.revenue_sat if latest_snapshot else 0,
+                latest_revenue_sat=latest_snapshot.revenue_sat
+                if latest_snapshot
+                else 0,
                 latest_units_sold=latest_snapshot.units_sold if latest_snapshot else 0,
                 cash_delta_sat=cash_delta_sat,
                 cash_delta_percent=cash_delta_percent,
-                latest_snapshot_epoch=latest_snapshot.epoch_number if latest_snapshot else None,
+                latest_snapshot_epoch=latest_snapshot.epoch_number
+                if latest_snapshot
+                else None,
             )
         )
-    items.sort(key=lambda item: (item.status != "active", -item.score, -item.cash_sat, -item.reputation))
+    items.sort(
+        key=lambda item: (
+            item.status != "active",
+            -item.score,
+            -item.cash_sat,
+            -item.reputation,
+        )
+    )
     return items
 
 
@@ -956,7 +1065,9 @@ def build_leaderboard(items: list[BusinessBoardItem]) -> list[LeaderboardEntry]:
     return leaderboard
 
 
-async def _build_delayed_reasoning(world: World, board: list[BusinessBoardItem]) -> list[DelayedReasoningEntry]:
+async def _build_delayed_reasoning(
+    world: World, board: list[BusinessBoardItem]
+) -> list[DelayedReasoningEntry]:
     cutoff_epoch = world.current_epoch_number - REASONING_DELAY_EPOCHS
     if cutoff_epoch < 1:
         return []
@@ -1003,7 +1114,9 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
     world = await get_world_by_id(world_id)
     if not world:
         raise ValueError("World not found.")
-    active_pending_payment_requests = await list_active_pending_payment_requests(world.id, pending_claim_cutoff())
+    active_pending_payment_requests = await list_active_pending_payment_requests(
+        world.id, pending_claim_cutoff()
+    )
     has_active_businesses = await world_has_active_businesses(world.id)
     current_epoch = (
         await get_epoch(world.id, world.current_epoch_number)
@@ -1046,9 +1159,13 @@ async def build_public_world_state(world_id: str) -> PublicWorldState:
         ),
         current_epoch=current_epoch,
         districts=[
-            await to_public_district(item, active_pending_payment_requests) for item in await list_districts(world.id)
+            await to_public_district(item, active_pending_payment_requests)
+            for item in await list_districts(world.id)
         ],
-        business_types=[to_public_business_type(item) for item in await list_business_types(world.id)],
+        business_types=[
+            to_public_business_type(item)
+            for item in await list_business_types(world.id)
+        ],
         businesses=board,
         leaderboard=build_leaderboard(board),
         recent_digests=recent_digests,
@@ -1070,7 +1187,9 @@ async def create_season_sponsorship(
         raise ValueError("World not found.")
     if world.status != "active":
         raise ValueError("World is not active.")
-    season_number = sponsorship_season_number(world, await world_has_active_businesses(world.id))
+    season_number = sponsorship_season_number(
+        world, await world_has_active_businesses(world.id)
+    )
     sponsor_name = data.sponsor_name.strip() if data.sponsor_name else None
     sponsorship_id = token_urlsafe(12)
     payment = await create_invoice(
@@ -1100,14 +1219,18 @@ async def create_season_sponsorship(
     return _to_sponsorship_response(sponsorship)
 
 
-async def get_season_sponsorship_status(sponsorship_id: str) -> SeasonSponsorshipResponse:
+async def get_season_sponsorship_status(
+    sponsorship_id: str,
+) -> SeasonSponsorshipResponse:
     sponsorship = await get_season_sponsorship(sponsorship_id)
     if not sponsorship:
         raise ValueError("Sponsorship not found.")
     return _to_sponsorship_response(sponsorship)
 
 
-def _to_sponsorship_response(sponsorship: SeasonSponsorship) -> SeasonSponsorshipResponse:
+def _to_sponsorship_response(
+    sponsorship: SeasonSponsorship,
+) -> SeasonSponsorshipResponse:
     return SeasonSponsorshipResponse(
         sponsorship_id=sponsorship.id,
         season_number=sponsorship.season_number,
@@ -1123,13 +1246,21 @@ def _to_sponsorship_response(sponsorship: SeasonSponsorship) -> SeasonSponsorshi
 async def payment_received_for_sponsorship(payment: Any) -> bool:
     sponsorship = await get_season_sponsorship_by_hash(payment.payment_hash)
     if not sponsorship:
-        logger.warning(f"No Market Town sponsorship found for hash {payment.payment_hash}")
+        logger.warning(
+            f"No Market Town sponsorship found for hash {payment.payment_hash}"
+        )
         return False
     if sponsorship.status == "paid":
         return True
-    updated = await update_season_sponsorship(sponsorship.copy(update={"status": "paid", "paid_at": utc_now()}))
+    updated = await update_season_sponsorship(
+        sponsorship.copy(update={"status": "paid", "paid_at": utc_now()})
+    )
     await create_audit_event(updated.world_id, "season_sponsorship_paid", updated.id)
-    await publish_public_event(updated.world_id, event="season_sponsorship_paid", payment_hash=updated.payment_hash)
+    await publish_public_event(
+        updated.world_id,
+        event="season_sponsorship_paid",
+        payment_hash=updated.payment_hash,
+    )
     return True
 
 
@@ -1147,20 +1278,31 @@ async def create_business_claim(data) -> PaymentRequestResponse:
     if not business_type or business_type.world_id != world.id:
         raise ValueError("Business type not found.")
     validate_lnaddress(data.payout_lnaddress)
-    active_pending_claims = await list_active_pending_payment_requests(world.id, pending_claim_cutoff())
+    active_pending_claims = await list_active_pending_payment_requests(
+        world.id, pending_claim_cutoff()
+    )
     payout_lnaddress = data.payout_lnaddress.lower()
     display_name = data.display_name.casefold()
-    if any(item.payout_lnaddress.lower() == payout_lnaddress for item in active_pending_claims):
+    if any(
+        item.payout_lnaddress.lower() == payout_lnaddress
+        for item in active_pending_claims
+    ):
         raise ValueError("A claim for this payout address is already pending.")
-    if any(item.display_name.casefold() == display_name for item in active_pending_claims):
+    if any(
+        item.display_name.casefold() == display_name for item in active_pending_claims
+    ):
         raise ValueError("A claim for this display name is already pending.")
     used_slots = await get_active_business_count_for_district(world.id, district.id)
-    pending_slots = len([item for item in active_pending_claims if item.district_id == district.id])
+    pending_slots = len(
+        [item for item in active_pending_claims if item.district_id == district.id]
+    )
     if used_slots + pending_slots >= district.slot_limit:
         raise ValueError("District is full.")
 
     amount_sat = business_type.open_fee_sat
-    operations_amount_sat, prize_pool_amount_sat = fee_breakdown(amount_sat, world.operator_fee_percent)
+    operations_amount_sat, prize_pool_amount_sat = fee_breakdown(
+        amount_sat, world.operator_fee_percent
+    )
     lnbits_tribute_amount_sat = calculate_tribute_amount(amount_sat)
     claim_token = token_urlsafe(24)
     payment = await create_invoice(
@@ -1195,8 +1337,15 @@ async def create_business_claim(data) -> PaymentRequestResponse:
         claim_token=claim_token,
     )
     await create_payment_request(record)
-    await create_audit_event(world.id, "claim_requested", record.id, payload={"display_name": data.display_name})
-    await publish_public_event(world.id, event="claim_requested", payment_request_id=record.id)
+    await create_audit_event(
+        world.id,
+        "claim_requested",
+        record.id,
+        payload={"display_name": data.display_name},
+    )
+    await publish_public_event(
+        world.id, event="claim_requested", payment_request_id=record.id
+    )
     return PaymentRequestResponse(
         payment_request_id=record.id,
         payment_hash=record.payment_hash,
@@ -1210,7 +1359,9 @@ async def get_claim_status(payment_request_id: str) -> PaymentStatusResponse:
     payment_request = await get_payment_request(payment_request_id)
     if not payment_request:
         raise ValueError("Payment request not found.")
-    await expire_pending_payment_requests(payment_request.world_id, pending_claim_cutoff())
+    await expire_pending_payment_requests(
+        payment_request.world_id, pending_claim_cutoff()
+    )
     payment_request = await get_payment_request(payment_request_id)
     if not payment_request:
         raise ValueError("Payment request not found.")
@@ -1242,7 +1393,9 @@ async def reveal_claim_credentials(claim_token: str) -> AgentCredentialReveal:
     api_key = generate_api_key()
     try:
         await update_agent(agent.copy(update={"api_key_hash": hash_api_key(api_key)}))
-        await create_audit_event(payment_request.world_id, "credentials_revealed", payment_request.id)
+        await create_audit_event(
+            payment_request.world_id, "credentials_revealed", payment_request.id
+        )
     except Exception:
         await reset_payment_request_credentials_reveal(claim_token)
         raise
@@ -1282,7 +1435,10 @@ async def get_agent_session(world_id: str, api_key: str) -> AgentSession:
 
 
 def validate_submission(
-    epoch: Epoch, business: Business, payload: ActionPayload, now: datetime | None = None
+    epoch: Epoch,
+    business: Business,
+    payload: ActionPayload,
+    now: datetime | None = None,
 ) -> str | None:
     now = now or utc_now()
     if business.status == "closed":
@@ -1293,18 +1449,26 @@ def validate_submission(
         return "Submission business does not match the active business."
     if now > epoch.submission_deadline_at:
         return "Submission cutoff has passed."
-    if payload.restock_units < 0 or payload.maintenance_budget_sat < 0 or payload.quality_budget_sat < 0:
+    if (
+        payload.restock_units < 0
+        or payload.maintenance_budget_sat < 0
+        or payload.quality_budget_sat < 0
+    ):
         return "Submission values must be non-negative."
     if payload.price_sat < 1:
         return "Price must be at least 1 sat."
     return None
 
 
-async def submit_action(world_id: str, api_key: str, payload: ActionPayload) -> SubmissionAccepted:
+async def submit_action(
+    world_id: str, api_key: str, payload: ActionPayload
+) -> SubmissionAccepted:
     session = await get_agent_session(world_id, api_key)
     error = validate_submission(session.current_epoch, session.business, payload)
     replaced_previous = (
-        await get_effective_submission_for_epoch(world_id, payload.epoch, session.business.id)
+        await get_effective_submission_for_epoch(
+            world_id, payload.epoch, session.business.id
+        )
     ) is not None
     submission = await create_submission(
         world_id=world_id,
@@ -1314,7 +1478,9 @@ async def submit_action(world_id: str, api_key: str, payload: ActionPayload) -> 
         is_valid=error is None,
         validation_error=error,
     )
-    await create_audit_event(world_id, "submission_created", submission.id, payload={"valid": error is None})
+    await create_audit_event(
+        world_id, "submission_created", submission.id, payload={"valid": error is None}
+    )
     return SubmissionAccepted(
         submission_id=submission.id,
         world_id=world_id,
@@ -1347,13 +1513,19 @@ def _quality_delta(spend: int) -> float:
     return 0.02
 
 
-def _price_score(price_sat: int, district: District, business_type_price_floor: int) -> float:
+def _price_score(
+    price_sat: int, district: District, business_type_price_floor: int
+) -> float:
     ratio = price_sat / max(1, business_type_price_floor)
     return clamp(1.6 - (ratio * district.price_sensitivity * 0.5), 0.1, 1.5)
 
 
 def _effective_event_multiplier(world: World, district: District) -> float:
-    base = world.active_event_multiplier if world.active_event_remaining_epochs > 0 else 1.0
+    base = (
+        world.active_event_multiplier
+        if world.active_event_remaining_epochs > 0
+        else 1.0
+    )
     return base
 
 
@@ -1372,12 +1544,15 @@ async def _resolve_district_businesses(
         business_type = business_types.get(business.business_type_id)
         if not business_type:
             continue
-        submission = await get_effective_submission_for_epoch(world.id, epoch.epoch_number, business.id)
+        submission = await get_effective_submission_for_epoch(
+            world.id, epoch.epoch_number, business.id
+        )
         payload = submission.payload if submission else None
         payloads[business.id] = payload
         price_sat = payload.price_sat if payload else business.price_sat
         scores[business.id] = (
-            0.30 * _price_score(price_sat, district, business_type.base_unit_cost_sat * 2)
+            0.30
+            * _price_score(price_sat, district, business_type.base_unit_cost_sat * 2)
             + 0.20 * clamp(business.quality_level, 0, 1.5)
             + 0.20 * clamp(business.reputation, 0, 1.5)
             + 0.15 * clamp(business.reliability, 0, 1.5)
@@ -1427,15 +1602,24 @@ async def _resolve_single_business(
     cash_after_restock = cash_before - restock_cost
     capacity = max(
         0,
-        math.floor(business_type.base_capacity_units * (0.7 + (0.6 * business.reliability))),
+        math.floor(
+            business_type.base_capacity_units * (0.7 + (0.6 * business.reliability))
+        ),
     )
     allocated = math.floor(demand * (score / total_scores))
     units_sold = min(allocated, stock_after_restock, capacity)
     revenue_sat = units_sold * price_sat
-    profit_sat = revenue_sat - business_type.fixed_rent_sat - maintenance_budget_sat - quality_budget_sat
+    profit_sat = (
+        revenue_sat
+        - business_type.fixed_rent_sat
+        - maintenance_budget_sat
+        - quality_budget_sat
+    )
     stock_after = max(0, stock_after_restock - units_sold)
     cash_after = cash_after_restock + profit_sat
-    reliability_after = clamp(reliability_before + _reliability_delta(maintenance_budget_sat), 0.0, 1.5)
+    reliability_after = clamp(
+        reliability_before + _reliability_delta(maintenance_budget_sat), 0.0, 1.5
+    )
     quality_after = clamp(quality_before + _quality_delta(quality_budget_sat), 0.0, 1.5)
     reputation_after = reputation_before
     if payload is None:
@@ -1510,7 +1694,9 @@ async def _resolve_epoch_businesses(
 ) -> int:
     # Partial retries are unsafe because later businesses would see mutated competitor state.
     for business in businesses:
-        if await get_snapshot_for_business_epoch(world.id, epoch.epoch_number, business.id):
+        if await get_snapshot_for_business_epoch(
+            world.id, epoch.epoch_number, business.id
+        ):
             raise ValueError("Epoch resolution already has partial snapshots.")
 
     by_district: dict[str, list[Business]] = {}
@@ -1536,7 +1722,9 @@ async def _resolve_epoch_businesses(
 async def _finalize_resolved_epoch(
     world: World, epoch: Epoch, board: list[BusinessBoardItem], snapshot_count: int
 ) -> Epoch:
-    top_names = ", ".join([item.display_name for item in board[:3]]) or "No active businesses"
+    top_names = (
+        ", ".join([item.display_name for item in board[:3]]) or "No active businesses"
+    )
     digest_text = f"Epoch {epoch.epoch_number} resolved. Leaders: {top_names}."
     updated_epoch = await update_epoch(
         epoch.copy(
@@ -1549,7 +1737,9 @@ async def _finalize_resolved_epoch(
         )
     )
     event_remaining = max(0, world.active_event_remaining_epochs - 1)
-    current_epoch_number = max(world.current_epoch_number, current_utc_epoch_number(world))
+    current_epoch_number = max(
+        world.current_epoch_number, current_utc_epoch_number(world)
+    )
     event_update = {
         "last_resolved_epoch": epoch.epoch_number,
         "last_digest_text": digest_text,
@@ -1576,7 +1766,9 @@ async def _finalize_resolved_epoch(
                     id=token_urlsafe(12),
                     world_id=world.id,
                     season_number=epoch.season_number,
-                    epoch_start=max(0, epoch.epoch_number - world.season_length_epochs + 1),
+                    epoch_start=max(
+                        0, epoch.epoch_number - world.season_length_epochs + 1
+                    ),
                     epoch_end=epoch.epoch_number,
                     leaderboard_text=leaderboard_payload,
                     payout_status="pending",
@@ -1591,7 +1783,9 @@ async def _finalize_resolved_epoch(
             world.copy(
                 update={
                     "current_epoch_number": current_epoch_number,
-                    "current_season_number": season_number_for_epoch(world, current_epoch_number),
+                    "current_season_number": season_number_for_epoch(
+                        world, current_epoch_number
+                    ),
                     "active_event_id": None,
                     "active_event_name": None,
                     "active_event_multiplier": 1.0,
@@ -1599,9 +1793,18 @@ async def _finalize_resolved_epoch(
                 }
             )
         )
-    await create_audit_event(world.id, "epoch_resolved", updated_epoch.id, payload={"snapshot_count": snapshot_count})
-    await publish_public_event(world.id, event="epoch_resolved", epoch_number=updated_epoch.epoch_number)
-    await publish_admin_event(world.id, scope="epochs", event="resolved", entity_id=updated_epoch.id)
+    await create_audit_event(
+        world.id,
+        "epoch_resolved",
+        updated_epoch.id,
+        payload={"snapshot_count": snapshot_count},
+    )
+    await publish_public_event(
+        world.id, event="epoch_resolved", epoch_number=updated_epoch.epoch_number
+    )
+    await publish_admin_event(
+        world.id, scope="epochs", event="resolved", entity_id=updated_epoch.id
+    )
     return updated_epoch
 
 
@@ -1627,7 +1830,9 @@ async def resolve_epoch(world_id: str, epoch_number: int | None = None) -> Epoch
         world = await ensure_runtime_world_state(world)
         if world.current_epoch_number <= 0:
             raise ValueError("World is idle until the first business opens.")
-        target_epoch_number = epoch_number if epoch_number is not None else world.current_epoch_number
+        target_epoch_number = (
+            epoch_number if epoch_number is not None else world.current_epoch_number
+        )
         epoch = await get_epoch(world.id, target_epoch_number)
         if not epoch:
             await ensure_current_epoch(world)
@@ -1650,8 +1855,12 @@ async def resolve_epoch(world_id: str, epoch_number: int | None = None) -> Epoch
 
         districts = {item.id: item for item in await list_districts(world.id)}
         business_types = {item.id: item for item in await list_business_types(world.id)}
-        businesses = [item for item in await list_businesses(world.id) if item.status != "closed"]
-        snapshot_count = await _resolve_epoch_businesses(world, epoch, districts, business_types, businesses)
+        businesses = [
+            item for item in await list_businesses(world.id) if item.status != "closed"
+        ]
+        snapshot_count = await _resolve_epoch_businesses(
+            world, epoch, districts, business_types, businesses
+        )
         board = await build_business_board(world)
         return await _finalize_resolved_epoch(world, epoch, board, snapshot_count)
 
@@ -1682,7 +1891,9 @@ async def payment_received_for_claim(payment: Any) -> bool:
         if not record:
             existing = await get_payment_request_by_hash(payment_hash)
             if not existing:
-                logger.warning(f"No Market Town payment request found for hash {payment_hash}")
+                logger.warning(
+                    f"No Market Town payment request found for hash {payment_hash}"
+                )
                 return False
             return existing.status == "paid"
         if record.status == "paid":
@@ -1691,25 +1902,35 @@ async def payment_received_for_claim(payment: Any) -> bool:
             return False
 
         try:
-            world, district, business_type = await _load_claim_settlement_entities(record)
+            world, district, business_type = await _load_claim_settlement_entities(
+                record
+            )
             had_active_businesses = await world_has_active_businesses(world.id)
             agent, business = await _load_claim_settlement_state(record)
             if not business:
-                settlement = await _assign_claim_settlement_business(record, world, district, business_type, agent)
+                settlement = await _assign_claim_settlement_business(
+                    record, world, district, business_type, agent
+                )
                 if not settlement:
                     return False
                 record, agent, business = settlement
             elif not agent:
-                agent = await get_agent(business.agent_id) if business.agent_id else None
+                agent = (
+                    await get_agent(business.agent_id) if business.agent_id else None
+                )
                 if not agent:
                     raise ValueError("Market Town settlement agent not found.")
 
             updated = await _finalize_claim_settlement(record, agent, business)
         except Exception as exc:
-            logger.warning(f"Market Town claim settlement failed for {record.id}: {exc}")
+            logger.warning(
+                f"Market Town claim settlement failed for {record.id}: {exc}"
+            )
             await _reset_failed_claim_settlement(record)
             return False
-        await _publish_claim_settlement_events(updated, world, agent, business, had_active_businesses)
+        await _publish_claim_settlement_events(
+            updated, world, agent, business, had_active_businesses
+        )
         return True
 
 
@@ -1723,29 +1944,42 @@ async def reset_world_seeds(world: World) -> None:
     await create_audit_event(world.id, "seed_reset", world.id)
 
 
-async def update_district_settings(district: District, data: UpdateDistrict) -> District:
+async def update_district_settings(
+    district: District, data: UpdateDistrict
+) -> District:
     updated = await update_district(district.copy(update=data.dict(exclude_unset=True)))
     await create_audit_event(updated.world_id, "district_updated", updated.id)
     return updated
 
 
 async def update_business_type_settings(business_type, data: UpdateBusinessType):
-    updated = await update_business_type(business_type.copy(update=data.dict(exclude_unset=True)))
+    updated = await update_business_type(
+        business_type.copy(update=data.dict(exclude_unset=True))
+    )
     await create_audit_event(updated.world_id, "business_type_updated", updated.id)
     return updated
 
 
 async def update_agent_status(agent, status: str):
     updated = await update_agent(agent.copy(update={"status": status}))
-    await create_audit_event(updated.world_id, "agent_updated", updated.id, payload={"status": status})
+    await create_audit_event(
+        updated.world_id, "agent_updated", updated.id, payload={"status": status}
+    )
     return updated
 
 
 async def override_business_status(business: Business, status: str) -> Business:
     updated = await update_business(
-        business.copy(update={"status": status, "closed_at": utc_now() if status == "closed" else None})
+        business.copy(
+            update={
+                "status": status,
+                "closed_at": utc_now() if status == "closed" else None,
+            }
+        )
     )
-    await create_audit_event(updated.world_id, "business_updated", updated.id, payload={"status": status})
+    await create_audit_event(
+        updated.world_id, "business_updated", updated.id, payload={"status": status}
+    )
     return updated
 
 
@@ -1781,7 +2015,9 @@ async def _assign_claim_settlement_business(
 ) -> tuple[PaymentRequestRecord, Agent, Business] | None:
     used_slots = await get_active_business_count_for_district(world.id, district.id)
     if used_slots >= district.slot_limit:
-        updated = await update_payment_request(record.copy(update={"status": "paid_unclaimed", "paid_at": utc_now()}))
+        updated = await update_payment_request(
+            record.copy(update={"status": "paid_unclaimed", "paid_at": utc_now()})
+        )
         await create_audit_event(
             world.id,
             "claim_paid_unclaimed",
@@ -1812,7 +2048,9 @@ async def _assign_claim_settlement_business(
             payout_lnaddress=record.payout_lnaddress,
         )
         try:
-            record = await update_payment_request(record.copy(update={"agent_id": agent.id}))
+            record = await update_payment_request(
+                record.copy(update={"agent_id": agent.id})
+            )
         except Exception:
             await delete_agent(agent.id)
             raise
@@ -1825,7 +2063,9 @@ async def _assign_claim_settlement_business(
         price_sat=max(1, business_type.base_unit_cost_sat * 2),
     )
     try:
-        record = await update_payment_request(record.copy(update={"business_id": business.id}))
+        record = await update_payment_request(
+            record.copy(update={"business_id": business.id})
+        )
     except Exception:
         await delete_business(business.id)
         raise
@@ -1849,7 +2089,9 @@ async def _finalize_claim_settlement(
 
 
 async def _reset_failed_claim_settlement(record: PaymentRequestRecord) -> None:
-    retry_status = "expired" if record.created_at <= pending_claim_cutoff() else "pending"
+    retry_status = (
+        "expired" if record.created_at <= pending_claim_cutoff() else "pending"
+    )
     await update_payment_request(record.copy(update={"status": retry_status}))
 
 
@@ -1869,20 +2111,28 @@ async def _publish_claim_settlement_events(
                 world.id,
             )
         except Exception as exc:
-            logger.warning(f"Market Town operator fee settlement failed for {updated.id}: {exc}")
+            logger.warning(
+                f"Market Town operator fee settlement failed for {updated.id}: {exc}"
+            )
     if updated.lnbits_tribute_amount_sat > 0:
         try:
             await pay_tribute(updated.lnbits_tribute_amount_sat, world.wallet_id)
         except Exception as exc:
-            logger.warning(f"Market Town tribute payment failed for {updated.id}: {exc}")
+            logger.warning(
+                f"Market Town tribute payment failed for {updated.id}: {exc}"
+            )
     if not had_active_businesses:
         next_epoch_number = max(1, world.last_resolved_epoch + 1)
         world = await update_world(
             world.copy(
                 update={
-                    "started_at": world_started_at_for_epoch(world, next_epoch_number, utc_now()),
+                    "started_at": world_started_at_for_epoch(
+                        world, next_epoch_number, utc_now()
+                    ),
                     "current_epoch_number": 0,
-                    "current_season_number": season_number_for_epoch(world, next_epoch_number),
+                    "current_season_number": season_number_for_epoch(
+                        world, next_epoch_number
+                    ),
                 }
             )
         )
@@ -1901,7 +2151,9 @@ async def _publish_claim_settlement_events(
             "payment_request_id": updated.id,
         },
     )
-    await publish_public_event(world.id, event="claim_paid", payment_request_id=updated.id)
+    await publish_public_event(
+        world.id, event="claim_paid", payment_request_id=updated.id
+    )
     await publish_admin_event(
         world.id,
         scope="payments",

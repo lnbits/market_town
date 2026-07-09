@@ -34,7 +34,7 @@ window.PageMarketTownPublic = {
         dialog: false,
         invoice: null,
         data: {
-          amount_sat: 50000,
+          amount_sat: 10000,
           sponsor_name: ''
         }
       },
@@ -390,11 +390,15 @@ window.PageMarketTownPublic = {
         this.claimDialog.show = false
         this.claimState = data
         this.paymentDialog.show = true
-        this.connectPaymentSocket(data.payment_hash, async (payload) => {
+        this.connectPaymentSocket(data.payment_hash, async payload => {
           this.claimState.status = payload.status
           await this.fetchWorldState()
           if (payload.status === 'paid' && this.claimState.claim_token) {
             await this.revealCredentials(this.claimState.claim_token)
+            Quasar.Notify.create({
+              type: 'positive',
+              message: 'Payment received.'
+            })
           } else if (payload.status === 'paid_unclaimed') {
             Quasar.Notify.create({
               type: 'warning',
@@ -421,7 +425,16 @@ window.PageMarketTownPublic = {
         this.sponsorship.invoice = data
         this.sponsorship.dialog = true
         this.connectPaymentSocket(data.payment_hash, () => {
+          Quasar.Notify.create({
+            type: 'positive',
+            message: 'Sponsorship payment received.'
+          })
           this.sponsorship.dialog = false
+          this.sponsorship.invoice = null
+          this.sponsorship.data = {
+            amount_sat: 10000,
+            sponsor_name: ''
+          }
           this.fetchWorldState()
         })
       } catch (error) {
