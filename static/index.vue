@@ -341,7 +341,9 @@
                 <template v-slot:body-cell-actions="props">
                   <q-td :props="props">
                     <q-btn
-                      v-if="['failed', 'partial'].includes(props.row.payout_status)"
+                      v-if="
+                        ['failed', 'partial'].includes(props.row.payout_status)
+                      "
                       dense
                       flat
                       color="primary"

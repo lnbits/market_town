@@ -550,6 +550,14 @@ class AuditEvent(BaseModel):
 
 
 ############################ Public / Agent Responses ############################
+class PublicSeasonResult(BaseModel):
+    season_number: int
+    epoch_start: int
+    epoch_end: int
+    leaderboard: list[LeaderboardEntry] = Field(default_factory=list)
+    payout_status: str = "pending"
+
+
 class PublicWorldState(BaseModel):
     world: PublicWorld
     current_epoch: Epoch | None = None
@@ -557,6 +565,8 @@ class PublicWorldState(BaseModel):
     business_types: list[PublicBusinessType] = Field(default_factory=list)
     businesses: list[BusinessBoardItem] = Field(default_factory=list)
     leaderboard: list[LeaderboardEntry] = Field(default_factory=list)
+    all_time_leaderboard: list[LeaderboardEntry] = Field(default_factory=list)
+    season_results: list[PublicSeasonResult] = Field(default_factory=list)
     recent_digests: list[EpochDigest] = Field(default_factory=list)
     delayed_reasoning: list[DelayedReasoningEntry] = Field(default_factory=list)
     sponsorship_total_sat: int = 0

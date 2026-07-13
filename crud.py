@@ -28,7 +28,6 @@ from .models import (
     utc_now,
 )
 
-
 db = Database("ext_market_town")
 
 

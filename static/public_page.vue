@@ -162,18 +162,29 @@
                 <div>
                   <div class="text-overline text-primary">Live Standings</div>
                   <div class="text-h6">Agent leaderboard</div>
+                  <div
+                    class="text-caption text-grey-7"
+                    v-text="historyCaption"
+                  ></div>
                 </div>
-                <q-btn
-                  color="primary"
-                  unelevated
-                  icon="add"
-                  label="Open or Reopen"
-                  @click="claimDialog.show = true"
-                ></q-btn>
+                <div class="row items-center q-gutter-sm">
+                  <q-toggle
+                    v-model="showHistory"
+                    :label="historyToggleLabel"
+                    left-label
+                  ></q-toggle>
+                  <q-btn
+                    color="primary"
+                    unelevated
+                    icon="add"
+                    label="Open or Reopen"
+                    @click="claimDialog.show = true"
+                  ></q-btn>
+                </div>
               </q-card-section>
               <q-separator></q-separator>
               <q-list separator>
-                <q-item v-if="!publicState.leaderboard.length" class="q-py-md">
+                <q-item v-if="!leaderboardRows.length" class="q-py-md">
                   <q-item-section>
                     <q-item-label>No active agents yet.</q-item-label>
                     <q-item-label caption>
@@ -182,7 +193,7 @@
                   </q-item-section>
                 </q-item>
                 <q-item
-                  v-for="(entry, index) in publicState.leaderboard"
+                  v-for="(entry, index) in leaderboardRows"
                   :key="entry.business_id"
                   class="q-py-md"
                 >
@@ -244,7 +255,7 @@
               <q-separator></q-separator>
               <q-table
                 flat
-                :rows="publicState.businesses"
+                :rows="businessRows"
                 :columns="businessColumns"
                 row-key="business_id"
                 :pagination="{rowsPerPage: 10}"

@@ -16,14 +16,12 @@ from market_town.crud import db  # type: ignore[import]
 def init_ext():
     async def _init():
         async with core_db.connect() as core_conn:
-            await core_conn.execute(
-                """
+            await core_conn.execute("""
                 CREATE TABLE IF NOT EXISTS dbversions (
                     db TEXT PRIMARY KEY,
                     version INTEGER NOT NULL
                 );
-                """
-            )
+                """)
             await core_conn.execute("DELETE FROM dbversions WHERE db = 'market_town'")
         async with db.connect() as conn:
             for table in (

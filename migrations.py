@@ -2,8 +2,7 @@ empty_dict: dict[str, str] = {}
 
 
 async def m001_initial(db):
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.worlds (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -29,11 +28,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (user_id)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.world_districts (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -49,11 +46,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, district_key)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.business_types (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -69,11 +64,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, type_key)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.agents (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -87,11 +80,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, api_key_hash)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.businesses (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -112,11 +103,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             closed_at TIMESTAMP
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.epochs (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -133,11 +122,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, epoch_number)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.submissions (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -148,11 +135,9 @@ async def m001_initial(db):
             validation_error TEXT,
             submitted_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.business_epoch_snapshots (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -174,11 +159,9 @@ async def m001_initial(db):
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, epoch_number, business_id)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.season_results (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -192,11 +175,9 @@ async def m001_initial(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (world_id, season_number)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.payment_requests (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -222,11 +203,9 @@ async def m001_initial(db):
             UNIQUE (payment_hash),
             UNIQUE (claim_token)
         );
-        """
-    )
+        """)
 
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.audit_events (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -235,8 +214,7 @@ async def m001_initial(db):
             payload_text TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now}
         );
-        """
-    )
+        """)
 
 
 async def m002_add_payment_request_reservation_expiry(db):
@@ -244,8 +222,7 @@ async def m002_add_payment_request_reservation_expiry(db):
 
 
 async def m003_add_season_sponsorships(db):
-    await db.execute(
-        f"""
+    await db.execute(f"""
         CREATE TABLE market_town.season_sponsorships (
             id TEXT PRIMARY KEY,
             world_id TEXT NOT NULL,
@@ -260,5 +237,4 @@ async def m003_add_season_sponsorships(db):
             updated_at TIMESTAMP NOT NULL DEFAULT {db.timestamp_now},
             UNIQUE (payment_hash)
         );
-        """
-    )
+        """)
