@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
 from lnbits.core.models.users import AccountId
+
 from market_town import market_town_ext  # type: ignore[import]
 from market_town.crud import get_world_by_id  # type: ignore[import]
 from market_town.services import (  # type: ignore[import]
@@ -19,9 +19,7 @@ def _wallet(wallet_id: str, user_id: str):
     return SimpleNamespace(id=wallet_id, user=user_id)
 
 
-async def _client(
-    monkeypatch, user_id: str, wallet_owner: str | None = None
-) -> AsyncClient:
+async def _client(monkeypatch, user_id: str, wallet_owner: str | None = None) -> AsyncClient:
     app = FastAPI()
     app.include_router(market_town_ext)
 
@@ -42,9 +40,7 @@ def _patch_payment_services(monkeypatch, payment_hash: str = "hash-api-claim"):
 
     async def fake_create_invoice(*args, **kwargs):
         if kwargs["wallet_id"].endswith("-fees"):
-            return SimpleNamespace(
-                payment_hash=f"{payment_hash}-fee", bolt11="lnbc1fee"
-            )
+            return SimpleNamespace(payment_hash=f"{payment_hash}-fee", bolt11="lnbc1fee")
         counter["value"] += 1
         return SimpleNamespace(
             payment_hash=f"{payment_hash}-{counter['value']}",
@@ -129,18 +125,14 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             assert update_business_type.status_code == 200
             assert update_business_type.json()["name"] == "API Cart"
 
-            public_world = await client.get(
-                f"/market_town/api/v1/public/world/{world_id}"
-            )
+            public_world = await client.get(f"/market_town/api/v1/public/world/{world_id}")
             assert public_world.status_code == 200
             public_payload = public_world.json()
             assert "user_id" not in public_payload["world"]
             assert "config_text" not in public_payload["districts"][0]
             assert "config_text" not in public_payload["business_types"][0]
 
-            public_ws = await client.get(
-                f"/market_town/api/v1/public/world/{world_id}/ws"
-            )
+            public_ws = await client.get(f"/market_town/api/v1/public/world/{world_id}/ws")
             assert public_ws.status_code == 200
             assert public_ws.json()["channel"] == f"market-town-public-{world_id}"
 
@@ -166,13 +158,9 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
                     extra={"tag": "market_town_sponsorship"},
                 )
             )
-            sponsored_world = await client.get(
-                f"/market_town/api/v1/public/world/{world_id}"
-            )
+            sponsored_world = await client.get(f"/market_town/api/v1/public/world/{world_id}")
             assert sponsored_world.json()["sponsorship_total_sat"] == 10_000
-            assert sponsored_world.json()["public_sponsors"] == [
-                {"name": "ACME", "amount_sat": 10_000}
-            ]
+            assert sponsored_world.json()["public_sponsors"] == [{"name": "ACME", "amount_sat": 10_000}]
 
             claim = await client.post(
                 f"/market_town/api/v1/public/world/{world_id}/claim",
@@ -187,9 +175,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             claim_payload = claim.json()
             assert claim_payload["claim_token"]
 
-            status = await client.get(
-                f"/market_town/api/v1/public/claims/{claim_payload['payment_request_id']}"
-            )
+            status = await client.get(f"/market_town/api/v1/public/claims/{claim_payload['payment_request_id']}")
             assert status.status_code == 200
             assert "claim_token" not in status.json()
 
@@ -201,9 +187,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             )
             assert settled is True
 
-            reveal = await client.post(
-                f"/market_town/api/v1/public/claims/{claim_payload['claim_token']}/reveal"
-            )
+            reveal = await client.post(f"/market_town/api/v1/public/claims/{claim_payload['claim_token']}/reveal")
             assert reveal.status_code == 200
             credentials = reveal.json()
             assert credentials["api_key"]
@@ -219,9 +203,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             assert agent_status.status_code == 200
             assert "api_key_hash" not in agent_status.json()
 
-            await client.put(
-                f"/market_town/api/v1/agents/{credentials['agent_id']}/status?status=active"
-            )
+            await client.put(f"/market_town/api/v1/agents/{credentials['agent_id']}/status?status=active")
 
             businesses = await client.get("/market_town/api/v1/businesses")
             assert businesses.status_code == 200
@@ -233,9 +215,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             assert business_status.status_code == 200
             assert business_status.json()["status"] == "distress"
 
-            await client.put(
-                f"/market_town/api/v1/businesses/{credentials['business_id']}/status?status=active"
-            )
+            await client.put(f"/market_town/api/v1/businesses/{credentials['business_id']}/status?status=active")
 
             epochs = await client.get("/market_town/api/v1/epochs")
             assert epochs.status_code == 200
@@ -265,8 +245,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             assert action.json()["accepted"] is True
 
             resolved = await client.post(
-                "/market_town/api/v1/epochs/resolve"
-                f"?epoch_number={session_payload['current_epoch']['epoch_number']}"
+                "/market_town/api/v1/epochs/resolve" f"?epoch_number={session_payload['current_epoch']['epoch_number']}"
             )
             assert resolved.status_code == 200
             assert resolved.json()["status"] == "resolved"
@@ -281,9 +260,7 @@ def test_api_all_endpoints_and_private_fields(monkeypatch):
             assert await get_world_by_id(world_id) is None
             deleted_world = await client.get("/market_town/api/v1/world")
             assert deleted_world.status_code == 404
-            deleted_public_world = await client.get(
-                f"/market_town/api/v1/public/world/{world_id}"
-            )
+            deleted_public_world = await client.get(f"/market_town/api/v1/public/world/{world_id}")
             assert deleted_public_world.status_code == 404
         finally:
             await client.aclose()

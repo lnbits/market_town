@@ -11,7 +11,6 @@ from market_town.services import (  # type: ignore[import]
 )
 
 from .simulation_helpers import (
-    advance_world_to_epoch,
     bootstrap_world,
     create_paid_agent,
     default_claim_options,
@@ -38,22 +37,16 @@ def test_create_season_sponsorship_invoice_full_amount_no_fees(monkeypatch):
         assert response.season_number == 1
 
         sponsorship_invoice = next(
-            item
-            for item in calls.created_invoices
-            if item.get("extra", {}).get("tag") == "market_town_sponsorship"
+            item for item in calls.created_invoices if item.get("extra", {}).get("tag") == "market_town_sponsorship"
         )
         assert sponsorship_invoice["wallet_id"] == world.wallet_id
         assert sponsorship_invoice["amount"] == 10_000
         assert sponsorship_invoice["extra"]["world_id"] == world.id
-        assert (
-            sponsorship_invoice["extra"]["season_number"] == 1
-        )  # Next season for idle world
+        assert sponsorship_invoice["extra"]["season_number"] == 1  # Next season for idle world
         assert sponsorship_invoice["extra"]["sponsorship_id"] == response.sponsorship_id
         assert sponsorship_invoice["extra"]["sponsor_name"] == "Alice"
 
-        assert not any(
-            item["wallet_id"] == world.fee_wallet_id for item in calls.created_invoices
-        )
+        assert not any(item["wallet_id"] == world.fee_wallet_id for item in calls.created_invoices)
         assert calls.tributes == []
 
     asyncio.run(_run())
@@ -62,9 +55,7 @@ def test_create_season_sponsorship_invoice_full_amount_no_fees(monkeypatch):
 def test_paid_sponsorship_counts_in_public_state_and_hides_small_sponsors(monkeypatch):
     async def _run():
         patch_lightning(monkeypatch)
-        world = await bootstrap_world(
-            name="Public Sponsor Market", wallet_id="public-sponsor-wallet"
-        )
+        world = await bootstrap_world(name="Public Sponsor Market", wallet_id="public-sponsor-wallet")
 
         small = await create_season_sponsorship(
             world.id,
@@ -93,9 +84,7 @@ def test_paid_sponsorship_counts_in_public_state_and_hides_small_sponsors(monkey
         names = [sponsor.name for sponsor in public_state.public_sponsors]
         assert "Big Spender" in names
         assert "Small Fry" not in names
-        assert anonymous.sponsorship_id not in [
-            sponsor.name for sponsor in public_state.public_sponsors
-        ]
+        assert anonymous.sponsorship_id not in [sponsor.name for sponsor in public_state.public_sponsors]
 
     asyncio.run(_run())
 
@@ -161,9 +150,7 @@ def test_season_payout_includes_sponsorship_total_with_existing_split(monkeypatc
 def test_invoice_listener_marks_sponsorship_paid(monkeypatch):
     async def _run():
         patch_lightning(monkeypatch)
-        world = await bootstrap_world(
-            name="Listener Market", wallet_id="listener-wallet"
-        )
+        world = await bootstrap_world(name="Listener Market", wallet_id="listener-wallet")
 
         response = await create_season_sponsorship(
             world.id,

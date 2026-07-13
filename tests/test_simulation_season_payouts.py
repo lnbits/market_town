@@ -65,17 +65,13 @@ def test_claim_fee_payouts_are_recorded_and_settled(monkeypatch):
             )
             claims.append(claim)
             paid = await payment_received_for_claim(
-                SimpleNamespace(
-                    payment_hash=claim.payment_hash, extra={"tag": "market_town"}
-                )
+                SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"})
             )
             assert paid is True
             credentials = await reveal_claim_credentials(claim.claim_token)
             assert credentials.api_key
 
-        payment_records = [
-            await get_payment_request(claim.payment_request_id) for claim in claims
-        ]
+        payment_records = [await get_payment_request(claim.payment_request_id) for claim in claims]
         assert all(record is not None for record in payment_records)
         for record in payment_records:
             assert record is not None
@@ -85,20 +81,12 @@ def test_claim_fee_payouts_are_recorded_and_settled(monkeypatch):
             assert record.lnbits_tribute_amount_sat == 10
             assert record.prize_pool_amount_sat == 440
             assert (
-                record.operations_amount_sat
-                + record.lnbits_tribute_amount_sat
-                + record.prize_pool_amount_sat
+                record.operations_amount_sat + record.lnbits_tribute_amount_sat + record.prize_pool_amount_sat
                 == record.amount_sat
             )
 
-        operator_payments = [
-            item for item in calls.paid_invoices if item["wallet_id"] == world.wallet_id
-        ]
-        operator_invoices = [
-            item
-            for item in calls.created_invoices
-            if item["wallet_id"] == world.fee_wallet_id
-        ]
+        operator_payments = [item for item in calls.paid_invoices if item["wallet_id"] == world.wallet_id]
+        operator_invoices = [item for item in calls.created_invoices if item["wallet_id"] == world.fee_wallet_id]
         assert len(operator_invoices) == len(claims)
         assert len(operator_payments) == len(claims)
         assert all(item["max_sat"] == 50 for item in operator_payments)
@@ -113,22 +101,14 @@ def test_claim_fee_payouts_are_recorded_and_settled(monkeypatch):
 
 def test_claim_settlement_executes_tribute_payment(monkeypatch):
     async def _run():
-        calls = SimpleNamespace(
-            created_invoices=[], paid_invoices=[], lnurl_requests=[]
-        )
+        calls = SimpleNamespace(created_invoices=[], paid_invoices=[], lnurl_requests=[])
 
         async def fake_create_invoice(*args, **kwargs):
             calls.created_invoices.append(kwargs)
-            return SimpleNamespace(
-                payment_hash="hash-tribute-claim", bolt11="lnbc1claim"
-            )
+            return SimpleNamespace(payment_hash="hash-tribute-claim", bolt11="lnbc1claim")
 
-        async def fake_get_pr_from_lnurl(
-            lnaddress: str, amount_msat: int, comment: str | None = None
-        ):
-            calls.lnurl_requests.append(
-                {"lnaddress": lnaddress, "amount_msat": amount_msat, "comment": comment}
-            )
+        async def fake_get_pr_from_lnurl(lnaddress: str, amount_msat: int, comment: str | None = None):
+            calls.lnurl_requests.append({"lnaddress": lnaddress, "amount_msat": amount_msat, "comment": comment})
             return "lnbc1tribute"
 
         async def fake_pay_invoice(**kwargs):
@@ -136,9 +116,7 @@ def test_claim_settlement_executes_tribute_payment(monkeypatch):
             return SimpleNamespace(ok=True)
 
         monkeypatch.setattr("market_town.services.create_invoice", fake_create_invoice)
-        monkeypatch.setattr(
-            "market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl
-        )
+        monkeypatch.setattr("market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl)
         monkeypatch.setattr("market_town.services.pay_invoice", fake_pay_invoice)
 
         world = await bootstrap_world(
@@ -159,9 +137,7 @@ def test_claim_settlement_executes_tribute_payment(monkeypatch):
         )
 
         paid = await payment_received_for_claim(
-            SimpleNamespace(
-                payment_hash=claim.payment_hash, extra={"tag": "market_town"}
-            )
+            SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"})
         )
         assert paid is True
         assert calls.lnurl_requests == [
@@ -209,9 +185,7 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
                 )
             )
             await payment_received_for_claim(
-                SimpleNamespace(
-                    payment_hash=claim.payment_hash, extra={"tag": "market_town"}
-                )
+                SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"})
             )
             agents.append(await reveal_claim_credentials(claim.claim_token))
 
@@ -265,11 +239,7 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
         assert leaderboard
         assert all(item["business_id"] for item in leaderboard)
         assert all("cash_sat" in item for item in leaderboard)
-        season_payouts = [
-            item
-            for item in calls.paid_invoices
-            if item.get("tag") == "market_town_season_payout"
-        ]
+        season_payouts = [item for item in calls.paid_invoices if item.get("tag") == "market_town_season_payout"]
         assert [item["max_sat"] for item in season_payouts] == [6792, 3396, 1132]
 
         businesses = await list_businesses(world.id)
@@ -298,9 +268,7 @@ def test_season_result_is_created_after_final_epoch_and_reward_payouts_are_paid(
             )
         )
         await payment_received_for_claim(
-            SimpleNamespace(
-                payment_hash=reopening_agent.payment_hash, extra={"tag": "market_town"}
-            )
+            SimpleNamespace(payment_hash=reopening_agent.payment_hash, extra={"tag": "market_town"})
         )
         credentials = await reveal_claim_credentials(reopening_agent.claim_token)
         session = await get_agent_session(world.id, credentials.api_key)
@@ -332,9 +300,7 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
                 )
             )
             await payment_received_for_claim(
-                SimpleNamespace(
-                    payment_hash=claim.payment_hash, extra={"tag": "market_town"}
-                )
+                SimpleNamespace(payment_hash=claim.payment_hash, extra={"tag": "market_town"})
             )
             agents.append(await reveal_claim_credentials(claim.claim_token))
 
@@ -345,10 +311,7 @@ def test_partial_season_payouts_retry_without_double_paying(monkeypatch):
         async def flaky_pay_invoice(**kwargs):
             nonlocal failed_once
             payout_attempts.append(kwargs["max_sat"])
-            if (
-                kwargs.get("tag") == "market_town_season_payout"
-                and kwargs["max_sat"] == 396
-            ):
+            if kwargs.get("tag") == "market_town_season_payout" and kwargs["max_sat"] == 396:
                 if not failed_once:
                     failed_once = True
                     return SimpleNamespace(
@@ -453,9 +416,7 @@ def test_pending_season_payout_refreshes_before_marking_failed(monkeypatch):
             return "lnbc1pending"
 
         async def fake_pay_invoice(**_kwargs):
-            return SimpleNamespace(
-                status="pending", pending=True, failed=False, payment_hash="hash"
-            )
+            return SimpleNamespace(status="pending", pending=True, failed=False, payment_hash="hash")
 
         async def fake_update_pending_payment(payment):
             refreshed.append(payment.payment_hash)
@@ -466,17 +427,11 @@ def test_pending_season_payout_refreshes_before_marking_failed(monkeypatch):
                 payment_hash=payment.payment_hash,
             )
 
-        monkeypatch.setattr(
-            "market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl
-        )
+        monkeypatch.setattr("market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl)
         monkeypatch.setattr("market_town.services.pay_invoice", fake_pay_invoice)
-        monkeypatch.setattr(
-            "market_town.services.update_pending_payment", fake_update_pending_payment
-        )
+        monkeypatch.setattr("market_town.services.update_pending_payment", fake_update_pending_payment)
 
-        payout = await _settle_single_season_payout(
-            world, season_result, "business", 21, agent
-        )
+        payout = await _settle_single_season_payout(world, season_result, "business", 21, agent)
 
         assert refreshed == ["hash"]
         assert payout["status"] == "paid"
@@ -533,9 +488,7 @@ def test_retry_failed_season_payout_uses_existing_summary_amounts(monkeypatch):
 
         async def fake_pay_invoice(**kwargs):
             paid_amounts.append(kwargs["max_sat"])
-            return SimpleNamespace(
-                status="success", pending=False, failed=False, payment_hash="paid-retry"
-            )
+            return SimpleNamespace(status="success", pending=False, failed=False, payment_hash="paid-retry")
 
         async def fake_update(updated):
             return updated
@@ -566,18 +519,14 @@ def test_retry_failed_season_payout_uses_existing_summary_amounts(monkeypatch):
         async def fake_audit(*_args, **_kwargs):
             return None
 
-        monkeypatch.setattr(
-            "market_town.services.get_season_result", fake_get_season_result
-        )
+        monkeypatch.setattr("market_town.services.get_season_result", fake_get_season_result)
         monkeypatch.setattr(
             "market_town.services.list_paid_payment_requests_for_season",
             fake_no_paid_requests,
         )
         monkeypatch.setattr("market_town.services.list_businesses", fake_businesses)
         monkeypatch.setattr("market_town.services.list_agents", fake_agents)
-        monkeypatch.setattr(
-            "market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl
-        )
+        monkeypatch.setattr("market_town.services.get_pr_from_lnurl", fake_get_pr_from_lnurl)
         monkeypatch.setattr("market_town.services.pay_invoice", fake_pay_invoice)
         monkeypatch.setattr("market_town.services.update_season_result", fake_update)
         monkeypatch.setattr("market_town.services.create_audit_event", fake_audit)
@@ -649,9 +598,7 @@ def test_full_season_lifecycle_archives_agents_and_reopens_next_epoch(monkeypatc
         assert all(item.closed_at is not None for item in stored_businesses)
 
         public_state = await build_public_world_state(world.id)
-        public_district = next(
-            item for item in public_state.districts if item.id == district.id
-        )
+        public_district = next(item for item in public_state.districts if item.id == district.id)
         assert public_state.current_epoch is None
         assert public_state.world.current_epoch_number == 2
         assert public_state.world.current_season_number == 1
@@ -676,9 +623,7 @@ def test_full_season_lifecycle_archives_agents_and_reopens_next_epoch(monkeypatc
         assert reopened_session.current_epoch.season_number == 2
 
         public_state = await build_public_world_state(world.id)
-        public_district = next(
-            item for item in public_state.districts if item.id == district.id
-        )
+        public_district = next(item for item in public_state.districts if item.id == district.id)
         assert public_state.current_epoch is not None
         assert public_state.current_epoch.epoch_number == 3
         assert public_state.current_epoch.season_number == 2
