@@ -1954,6 +1954,21 @@ async def _publish_claim_settlement_events(
                 }
             )
         )
+        existing_epoch = await get_epoch(world.id, next_epoch_number)
+        if existing_epoch and not existing_epoch.resolved_at:
+            started_at, submission_deadline_at, digest_at = epoch_window(
+                world, next_epoch_number
+            )
+            await update_epoch(
+                existing_epoch.copy(
+                    update={
+                        "started_at": started_at,
+                        "submission_deadline_at": submission_deadline_at,
+                        "digest_at": digest_at,
+                        "status": "open",
+                    }
+                )
+            )
         await ensure_current_epoch(world)
     await create_audit_event(
         world.id,

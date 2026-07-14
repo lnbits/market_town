@@ -10,6 +10,7 @@ from market_town.crud import (  # type: ignore[import]
     list_businesses,
     list_epochs,
     update_district,
+    update_epoch,
     update_payment_request,
     update_world,
 )
@@ -32,6 +33,7 @@ from .simulation_helpers import (
     create_paid_agent,
     current_session,
     default_claim_options,
+    ensure_epoch,
     patch_lightning,
     submit_strategy,
 )
@@ -120,6 +122,45 @@ def test_ensure_current_epoch_caps_backfill_per_call(monkeypatch):
         epochs = await list_epochs(world.id)
         assert [item.epoch_number for item in epochs] == [6, 5, 4, 3, 2, 1]
         assert all(item.epoch_number <= 6 for item in epochs)
+
+    asyncio.run(_run())
+
+
+def test_first_business_rebases_stale_open_epoch(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Stale Epoch Market")
+        district, business_type = await default_claim_options(world.id)
+        world = await update_world(
+            world.copy(
+                update={
+                    "last_resolved_epoch": 42,
+                    "current_epoch_number": 42,
+                    "started_at": utc_now() - timedelta(hours=4 * 43),
+                }
+            )
+        )
+        stale_epoch = await ensure_epoch(world, 43)
+        await update_epoch(
+            stale_epoch.copy(
+                update={
+                    "started_at": utc_now() - timedelta(hours=4),
+                    "submission_deadline_at": utc_now() - timedelta(minutes=5),
+                    "digest_at": utc_now() - timedelta(minutes=1),
+                }
+            )
+        )
+
+        agent = await create_paid_agent(
+            world,
+            display_name="first-after-idle",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        session = await current_session(world.id, agent)
+
+        assert session.current_epoch.epoch_number == 43
+        assert session.current_epoch.submission_deadline_at > utc_now()
 
     asyncio.run(_run())
 
