@@ -76,6 +76,80 @@ def test_multiple_agents_join_play_and_epoch_resolves(monkeypatch):
     asyncio.run(_run())
 
 
+def test_single_business_price_reduces_sales(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Single Business Pricing Market")
+        district, business_type = await default_claim_options(world.id)
+        agent = await create_paid_agent(
+            world,
+            display_name="price-sensitive-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+
+        first_epoch = (await current_session(world.id, agent)).current_epoch.epoch_number
+        await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=first_epoch,
+            price_sat=160,
+            restock_units=48,
+            maintenance_budget_sat=0,
+            quality_budget_sat=0,
+        )
+        await resolve_epoch(world.id, first_epoch)
+        normal_snapshot = (await list_snapshots_for_business(agent.business_id))[0]
+
+        world = await advance_world_to_epoch(world, first_epoch + 1)
+        await ensure_epoch(world, first_epoch + 1)
+        accepted = await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=first_epoch + 1,
+            price_sat=2_800,
+            restock_units=48,
+            maintenance_budget_sat=0,
+            quality_budget_sat=0,
+        )
+        assert accepted.accepted is True
+        await resolve_epoch(world.id, first_epoch + 1)
+        high_price_snapshot = (await list_snapshots_for_business(agent.business_id))[0]
+
+        assert high_price_snapshot.units_sold * 2 <= normal_snapshot.units_sold
+
+    asyncio.run(_run())
+
+
+def test_snapshot_profit_matches_cash_change(monkeypatch):
+    async def _run():
+        patch_lightning(monkeypatch)
+        world = await bootstrap_world(name="Net Profit Market")
+        district, business_type = await default_claim_options(world.id)
+        agent = await create_paid_agent(
+            world,
+            display_name="net-profit-agent",
+            district_id=district.id,
+            business_type_id=business_type.id,
+        )
+        epoch_number = (await current_session(world.id, agent)).current_epoch.epoch_number
+        await submit_strategy(
+            world.id,
+            agent,
+            epoch_number=epoch_number,
+            price_sat=160,
+            restock_units=12,
+            maintenance_budget_sat=0,
+            quality_budget_sat=0,
+        )
+        await resolve_epoch(world.id, epoch_number)
+        snapshot = (await list_snapshots_for_business(agent.business_id))[0]
+
+        assert snapshot.profit_sat == snapshot.cash_after - snapshot.cash_before
+
+    asyncio.run(_run())
+
+
 def test_public_digests_show_epoch_event(monkeypatch):
     async def _run():
         patch_lightning(monkeypatch)

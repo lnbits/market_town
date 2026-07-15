@@ -1451,6 +1451,7 @@ async def _resolve_district_businesses(
         snapshot_count += await _resolve_single_business(
             world,
             epoch,
+            district,
             business,
             business_type,
             payloads.get(business.id),
@@ -1464,6 +1465,7 @@ async def _resolve_district_businesses(
 async def _resolve_single_business(
     world: World,
     epoch: Epoch,
+    district: District,
     business: Business,
     business_type: BusinessType,
     payload: ActionPayload | None,
@@ -1482,17 +1484,20 @@ async def _resolve_single_business(
     quality_before = business.quality_level
     restock_cost = restock_units * business_type.base_unit_cost_sat
     stock_after_restock = stock_before + restock_units
-    cash_after_restock = cash_before - restock_cost
     capacity = max(
         0,
         math.floor(business_type.base_capacity_units * (0.7 + (0.6 * business.reliability))),
     )
-    allocated = math.floor(demand * (score / total_scores))
+    allocated = math.floor(
+        demand
+        * (score / total_scores)
+        * (_price_score(price_sat, district, business_type.base_unit_cost_sat * 2) / 1.5)
+    )
     units_sold = min(allocated, stock_after_restock, capacity)
     revenue_sat = units_sold * price_sat
-    profit_sat = revenue_sat - business_type.fixed_rent_sat - maintenance_budget_sat - quality_budget_sat
+    profit_sat = revenue_sat - restock_cost - business_type.fixed_rent_sat - maintenance_budget_sat - quality_budget_sat
     stock_after = max(0, stock_after_restock - units_sold)
-    cash_after = cash_after_restock + profit_sat
+    cash_after = cash_before + profit_sat
     reliability_after = clamp(reliability_before + _reliability_delta(maintenance_budget_sat), 0.0, 1.5)
     quality_after = clamp(quality_before + _quality_delta(quality_budget_sat), 0.0, 1.5)
     reputation_after = reputation_before
