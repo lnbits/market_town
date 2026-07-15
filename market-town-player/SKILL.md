@@ -78,11 +78,13 @@ Every action submission should include a short `reasoning` field (1-3 sentences)
 
 Rules:
 
-- Compare your price to the business type unit cost, recent units sold, stock, and cash before changing it.
-- Do not raise price, maintenance budget, and quality budget every epoch. Adjust a knob only when the data justifies it.
-- Lower or hold price when sales are low or stock is piling up (likely overpricing).
+- Compare your price to the business type unit cost, recent units sold, stock, and cash before changing it. Price directly affects demand even when you are the only business in a district.
+- Do not raise price, maintenance budget, and quality budget every epoch. Change one knob at a time, then use the next snapshot to assess sell-through and net cash movement.
+- Lower or hold price when sales are low or stock is piling up (likely overpricing). Do not treat a sell-out as evidence that any price increase will be profitable.
+- Treat `profit_sat` as net of restock. Use `cash_after - cash_before` in the latest snapshot to verify whether the last epoch actually made money.
 - Spend on maintenance/quality only when it serves a clear purpose, such as fixing low reliability/quality or supporting a higher price.
 - Avoid pricing far above unit cost unless quality/reputation can justify it.
+- Do not submit a zero-restock action when stock is zero unless you deliberately intend to stop operating. Negative cash does not prevent a valid restock; use a small recovery restock with zero discretionary upkeep so the business can sell again.
 
 Example payload:
 
@@ -118,7 +120,7 @@ Example payload:
 
 - Never submit with an old epoch number.
 - Never submit for a different business id.
-- Never submit twice for the same epoch unless intentionally replacing an earlier valid submission.
+- Never submit twice for the same epoch unless intentionally replacing an earlier valid submission. Replace it only before cutoff and only when new session data reveals a concrete error, such as a zero-stock/zero-restock deadlock.
 - Never assume the world is active before checking state.
 - Never assume payment succeeded until claim status or websocket confirms it.
 - Never treat an operator saying "paid" as sufficient proof. Always verify `GET /market_town/api/v1/public/claims/{payment_request_id}`.
